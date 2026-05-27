@@ -17,9 +17,9 @@
   --text-muted: #6c788f;
   --text-dim: #7f8ca1;
 
-  --accent: #ff7400;
-  --accent-dim: rgba(255, 116, 0, 0.12);
-  --accent-glow: rgba(255, 116, 0, 0.22);
+  --accent: #f24105;
+  --accent-dim: rgba(242, 65, 5, 0.12);
+  --accent-glow: rgba(242, 65, 5, 0.22);
 
   --success: #1fb56a;
   --success-dim: rgba(31, 181, 106, 0.12);
@@ -422,7 +422,7 @@ select option { background: var(--bg-2); }
   border-radius: 50%;
   flex-shrink: 0;
 }
-.cor-laranja { background: #ff8c00; }
+.cor-laranja { background: #f24105; }
 .cor-azul    { background: #3b82f6; }
 .cor-preto   { background: #555; border: 1px solid #777; }
 .cor-branco  { background: #ccc; border: 1px solid #aaa; }
@@ -449,8 +449,8 @@ select option { background: var(--bg-2); }
 }
 
 .btn-primary:hover {
-  background: #ff8a26;
-  box-shadow: 0 0 16px rgba(255, 116, 0, 0.18);
+  background: #f24105;
+  box-shadow: 0 0 16px rgba(242, 65, 5, 0.18);
 }
 
 .btn-secondary {
@@ -460,7 +460,7 @@ select option { background: var(--bg-2); }
 }
 
 .btn-secondary:hover {
-  background: #fff6ed;
+  background: #fff1ed;
   color: var(--accent);
   border-color: var(--accent);
 }
@@ -704,6 +704,43 @@ select option { background: var(--bg-2); }
   font-family: var(--font-mono);
   background: var(--danger-dim);
   color: var(--danger);
+}
+
+.production-history-summary {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-dim);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 12px;
+}
+
+.production-history-summary strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.production-history-item + .production-history-item {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border);
+}
+
+.production-history-item span,
+.production-history-item small {
+  display: block;
+}
+
+.production-history-item small {
+  margin-top: 2px;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
 
 .detail-section {

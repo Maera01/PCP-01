@@ -1131,6 +1131,43 @@ const App = {
     return (this.data.expedicao || []).filter(e => e.statusConferencia === 'Aceito');
   },
 
+  problemasProducao(item) {
+    const etapas = item?.pedidoSnapshot?.etapas || {};
+    return Object.entries(etapas)
+      .map(([key, etapa]) => {
+        const problema = String(etapa?.problema || '').trim();
+        const descricao = String(etapa?.problemaDescricao || '').trim();
+        const temProblema = problema && !['Não', 'Nao', 'NaN'].includes(problema);
+        if (!temProblema || !descricao) return null;
+
+        return {
+          etapa: ET_NOMES[key] || key,
+          problema,
+          descricao,
+          saida: etapa?.problemaSaida || '',
+          retorno: etapa?.problemaRetorno || ''
+        };
+      })
+      .filter(Boolean);
+  },
+
+  resumoProblemasProducao(item) {
+    const problemas = this.problemasProducao(item);
+    if (!problemas.length) return '';
+
+    return `
+      <div class="production-history-summary">
+        <strong>Histórico de Produção</strong>
+        ${problemas.map(p => `
+          <div class="production-history-item">
+            <span>${escapar(p.etapa)}: ${escapar(p.problema)}</span>
+            <small>${escapar(p.descricao)}</small>
+            ${(p.saida || p.retorno) ? `
+              <small>Saída: ${fmtData(p.saida)} · Retorno: ${fmtData(p.retorno)}</small>` : ''}
+          </div>`).join('')}
+      </div>`;
+  },
+
   renderConcluidos(lista) {
     lista = lista ?? this.getConcluidos();
     const tbody = document.getElementById('tbody-concluidos');
@@ -1154,7 +1191,10 @@ const App = {
           <td>${this.resumoChecklistExpedicao(e)}</td>
           <td>${this.resumoConferenciaExpedicao(e)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${fmtData(e.dataConferencia)}</td>
-          <td>${escapar(e.obs)||'—'}</td>
+          <td>
+            ${e.obs ? `<div>${escapar(e.obs)}</div>` : '—'}
+            ${this.resumoProblemasProducao(e)}
+          </td>
           <td>
             <div class="actions-cell">
               <button class="btn-icon"
@@ -1290,7 +1330,8 @@ const App = {
     const lista = this.getConcluidos().filter(e => {
       const texto = [
         e.equipamento, e.serie, e.obs, e.statusConferencia,
-        e.estadoGeral, ...(e.acessorios || []).map(a => a.nome)
+        e.estadoGeral, ...(e.acessorios || []).map(a => a.nome),
+        ...this.problemasProducao(e).flatMap(p => [p.etapa, p.problema, p.descricao])
       ].join(' ').toLowerCase();
       return !busca || texto.includes(busca);
     });
@@ -1581,13 +1622,13 @@ const App = {
 
   _promptExpedicaoDoubleCheck() {
     if (!confirm('Tem certeza que deseja autorizar este equipamento?')) return null;
-    const login = prompt('Login do usuário de expedição:');
+    const login = prompt('Login do usuário de expedição ou admin:');
     if (!login) return null;
-    const senha = prompt('Senha do usuário de expedição:');
+    const senha = prompt('Senha do usuário de expedição ou admin:');
     if (!senha) return null;
     const usuario = Auth.validarCredenciais(login, senha);
-    if (!usuario || usuario.perfil !== 'expedicao') {
-      this.toast('Credenciais de expedição inválidas.', 'error');
+    if (!usuario || !['expedicao', 'admin'].includes(usuario.perfil)) {
+      this.toast('Credenciais de expedição/admin inválidas.', 'error');
       return null;
     }
     return usuario;
@@ -1623,6 +1664,7 @@ const App = {
         Início: ${fmtData(etapa.inicio)}<br/>
         Fim: ${fmtData(etapa.fim)}<br/>
         Problema: ${escapar(etapa.problema)||'—'}
+        ${etapa.problemaDescricao ? `<br/>Relato: ${escapar(etapa.problemaDescricao)}` : ''}
       </div>`;
     }).join('');
     prodContainer.style.display = '';
@@ -1675,7 +1717,7 @@ const App = {
     } else if (item.checklistCompleto && item.aceiteEquipamento === 'Sim' && item.aceiteAcessorios === 'Sim' && item.estadoGeral === 'Aprovado') {
       const expedicao = this._promptExpedicaoDoubleCheck();
       if (!expedicao) return;
-      item.autorizadoAdmin = false;
+      item.autorizadoAdmin = expedicao.perfil === 'admin';
       item.autorizadoPor = expedicao.nome;
       item.conferidoPor = expedicao.nome;
     } else {
@@ -1711,12 +1753,8 @@ const App = {
       conferido: checks.includes(idx)
     }));
     const checklistCompleto = acessorios.length === 0 || acessorios.every(a => a.conferido);
-    const admin = typeof Auth !== 'undefined' && Auth.getPerfil() === 'admin';
-
-    if (!checklistCompleto && !admin) {
-      this.toast('Checklist incompleto. Somente admin pode autorizar expedição com acessório pendente.', 'error');
-      return;
-    }
+    const admin = !checklistCompleto ? this._promptMasterAuthorization() : null;
+    if (!checklistCompleto && !admin) return;
 
     const e = {
       id:          uid(),
@@ -1728,8 +1766,8 @@ const App = {
       dataEntrega: gv('ex-data'),
       acessorios,
       checklistCompleto,
-      autorizadoAdmin: !checklistCompleto && admin,
-      autorizadoPor: !checklistCompleto && admin ? Auth.getNome() : '',
+      autorizadoAdmin: !checklistCompleto && !!admin,
+      autorizadoPor: !checklistCompleto && admin ? admin.nome : '',
       estadoGeral: '',
       aceiteEquipamento: '',
       aceiteAcessorios: '',
