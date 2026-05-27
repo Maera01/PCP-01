@@ -326,6 +326,11 @@ function pedidoConcluido(pedido) {
   });
 }
 
+function separacaoPermiteFinalizacao(status) {
+  const normalized = String(status || '').trim().toLowerCase();
+  return normalized === 'separado' || normalized.includes('parcial');
+}
+
 function statusConferenciaExpedicao(item) {
   if (item.aceiteEquipamento === 'Não' || item.aceiteAcessorios === 'Não' || item.estadoGeral === 'Reprovado') {
     return 'Recusado';
@@ -608,7 +613,7 @@ const App = {
               <button class="btn-icon"
                 onclick="App.verPedido('${escapar(p.id)}')"
                 title="Ver detalhes">👁</button>
-              ${podeFinalizar && pedidoConcluido(p) && String(p.statusSep || '').trim().toLowerCase() === 'separado' ? `
+              ${podeFinalizar && pedidoConcluido(p) && separacaoPermiteFinalizacao(p.statusSep) ? `
                 <button class="btn-icon success"
                   onclick="App.abrirFinalizacaoPedido('${escapar(p.id)}')"
                   title="Finalizar e enviar para Expedição">✓</button>` : ''}
@@ -627,7 +632,7 @@ const App = {
     const venc   =  document.getElementById('filtro-vencimento')?.value || '';
 
     const lista = this.data.pedidos.filter(p => {
-      const texto = [p.produto, p.serie, p.cliente, p.observacao].join(' ').toLowerCase();
+      const texto = [p.produto, p.serie, p.cliente, p.numeroOP, p.observacao, p.observacaoAlmox].join(' ').toLowerCase();
       if (busca && !texto.includes(busca)) return false;
       if (status) {
         const match = p.statusSep === status
@@ -693,6 +698,8 @@ const App = {
             <span>${badgeSep(p.statusSep)}</span></div>
           <div class="detail-item"><label>Data Sep.</label>
             <span>${fmtData(p.dataSep)}</span></div>
+          <div class="detail-item"><label>N° OP</label>
+            <span>${escapar(p.numeroOP)||'—'}</span></div>
           <div class="detail-item"><label>Faltante</label>
             <span>${escapar(p.materialFaltante)||'—'}</span></div>
           <div class="detail-item"><label>Entrega Parcial</label>
@@ -710,9 +717,14 @@ const App = {
           <h3>Peças Pedidas</h3>
           <div class="obs-box">${escapar(p.pecasPedidas)}</div>
         </div>` : ''}
+      ${p.observacaoAlmox ? `
+        <div class="detail-section">
+          <h3>Observação Almoxarifado</h3>
+          <div class="obs-box">${escapar(p.observacaoAlmox)}</div>
+        </div>` : ''}
       ${p.observacao ? `
         <div class="detail-section">
-          <h3>Observação</h3>
+          <h3>Observação Comercial</h3>
           <div class="obs-box">${escapar(p.observacao)}</div>
         </div>` : ''}
       <div class="detail-section">
@@ -744,9 +756,11 @@ const App = {
     sv('ed-situacao').value   = p.situacao   || 'VENDIDO';
     sv('ed-datapedido').value = p.dataPedido || '';
     sv('ed-prazo').value      = p.prazo      || '';
+    sv('ed-obs-comercial-edit').value = p.observacao || '';
 
     // ── ALMOXARIFADO ──
     sv('ed-serie').value      = p.serie              || '';
+    sv('ed-op').value         = p.numeroOP           || '';
     sv('ed-statussep').value  = p.statusSep          || 'Em Separação';
     sv('ed-datsep').value     = p.dataSep            || '';
     sv('ed-matfaltante').value = p.materialFaltante   || '';
@@ -755,7 +769,8 @@ const App = {
     sv('ed-datapedidopecas').value = p.dataPedidoPecas || '';
     sv('ed-dataretornopecas').value = p.dataRetornoPecas || '';
     sv('ed-pecaspedidas').value = p.pecasPedidas || '';
-    sv('ed-obs').value        = p.observacao         || '';
+    sv('ed-obs-comercial').value = p.observacao      || '';
+    sv('ed-obs-almox').value  = p.observacaoAlmox    || '';
     this.toggleCamposPecas();
 
     // ── PRODUÇÃO — monta etapas ──
@@ -959,12 +974,14 @@ const App = {
       p.situacao   = gv('ed-situacao');
       p.dataPedido = gv('ed-datapedido');
       p.prazo      = gv('ed-prazo');
+      p.observacao = gv('ed-obs-comercial-edit').trim();
     }
 
     // Salva ALMOXARIFADO (se tiver permissão)
     const podeAlm = typeof Auth === 'undefined' || Auth.pode('editarAlmoxarifado');
     if (podeAlm) {
       p.serie              = gv('ed-serie');
+      p.numeroOP           = gv('ed-op').trim();
       p.statusSep          = gv('ed-statussep');
       p.dataSep            = gv('ed-datsep');
       p.materialFaltante   = gv('ed-matfaltante');
@@ -973,7 +990,7 @@ const App = {
       p.dataPedidoPecas    = p.dataEntregaParcial ? gv('ed-datapedidopecas') : '';
       p.dataRetornoPecas   = p.dataEntregaParcial ? gv('ed-dataretornopecas') : '';
       p.pecasPedidas       = p.dataEntregaParcial ? gv('ed-pecaspedidas').trim() : '';
-      p.observacao         = gv('ed-obs');
+      p.observacaoAlmox    = gv('ed-obs-almox').trim();
     }
 
     // Salva PRODUÇÃO (se tiver permissão)
@@ -1027,10 +1044,12 @@ const App = {
       dataPedido:       gv('np-data-pedido'),
       prazo:            gv('np-prazo'),
       observacao:       gv('np-observacao').trim(),
+      observacaoAlmox:  '',
       statusVencimento: 'Em produção',
       diasAtraso:       0,
       statusSep:        'Em Separação',
       dataSep:          '',
+      numeroOP:         '',
       materialCorreto:  '',
       materialFaltante: '',
       dataEntregaParcial: '',
@@ -1082,6 +1101,10 @@ const App = {
       this.toast('Finalize todas as etapas de produção antes de enviar para Expedição.', 'error');
       return;
     }
+    if (!separacaoPermiteFinalizacao(p.statusSep)) {
+      this.toast('Separe total ou parcialmente antes de enviar para Expedição.', 'error');
+      return;
+    }
     this._finalizarIdx = idx;
     document.getElementById('fin-titulo').textContent =
       `Finalizar — ${p.produto}${p.serie ? ' / ' + p.serie : ''}`;
@@ -1104,6 +1127,11 @@ const App = {
     const p = this.data.pedidos[this._finalizarIdx];
     if (!p || !pedidoConcluido(p)) {
       this.toast('Pedido ainda não está pronto para Expedição.', 'error');
+      return;
+    }
+
+    if (!separacaoPermiteFinalizacao(p.statusSep)) {
+      this.toast('Separe total ou parcialmente antes de enviar para Expedição.', 'error');
       return;
     }
 
