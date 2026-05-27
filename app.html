@@ -105,6 +105,7 @@
           : App.openModal('novo-pedido')">
         + Novo Pedido
       </button>
+      <button class="btn btn-secondary" onclick="App.openProdutosModal()">Produtos</button>
       <button class="btn btn-secondary" onclick="App.openKitsModal()">Kits</button>
       <button class="btn btn-secondary"
         onclick="App.exportarDados()">↓ Exportar</button>
@@ -131,6 +132,37 @@
     </div>
   </div>
 </div>
+    <!-- ====== MODAL PRODUTOS ====== -->
+    <div class="modal-overlay" id="modal-produtos"
+      onclick="if(event.target===this)App.closeModal('produtos')">
+      <div class="modal modal-large" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Produtos</h2>
+          <button class="modal-close" onclick="App.closeModal('produtos')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:flex;gap:16px">
+            <div style="flex:1;max-width:460px">
+              <div id="produtos-list"></div>
+            </div>
+            <div style="flex:1">
+              <form id="form-produto" onsubmit="App.salvarProduto(event)">
+                <input type="hidden" id="produto-original" />
+                <div class="form-group">
+                  <label>Nome do Produto</label>
+                  <input class="input" id="produto-nome" placeholder="Ex: ASE100" required />
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                  <button type="button" class="btn btn-secondary" onclick="App.resetProdutoForm()">Limpar</button>
+                  <button type="submit" class="btn btn-primary">Salvar Produto</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ====== MODAL KITS ====== -->
     <div class="modal-overlay" id="modal-kits"
       onclick="if(event.target===this)App.closeModal('kits')">
@@ -148,7 +180,7 @@
               <form id="form-kit" onsubmit="App.salvarKit(event)">
                 <div class="form-group">
                   <label>Equipamento</label>
-                  <input class="input" id="kit-produto" placeholder="Ex: ASE100" required />
+                  <input class="input" id="kit-produto" list="produtos-datalist" placeholder="Ex: ASE100" required />
                 </div>
                 <div class="form-group">
                   <label>Nome do Kit</label>
@@ -601,6 +633,7 @@
 </div>
 
 <div class="toast" id="toast"></div>
+<datalist id="produtos-datalist"></datalist>
 
 <!-- ✅ auth.js ANTES do app.js — ambos em js/ -->
 <script src="js/auth.js"></script>

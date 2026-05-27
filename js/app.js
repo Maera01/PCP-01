@@ -206,6 +206,7 @@ const Store = {
     return {
       pedidos:   SEED_PEDIDOS,
       expedicao: SEED_EXPEDICAO,
+      produtos:  PRODUTOS.slice(),
       kits:      kits,
       logs:      [],
       criadoEm:  new Date().toISOString()
@@ -236,6 +237,7 @@ const Store = {
 
     if (!data.logs) data.logs = [];
     if (!data.kits) data.kits = [];
+    if (!Array.isArray(data.produtos) || !data.produtos.length) data.produtos = PRODUTOS.slice();
     if (!data.pedidos) data.pedidos = [];
     if (!data.expedicao) data.expedicao = [];
     return data;
@@ -247,6 +249,7 @@ const Store = {
       this.save(data);
     }
     if (!data.logs) data.logs = [];
+    if (!Array.isArray(data.produtos) || !data.produtos.length) data.produtos = PRODUTOS.slice();
     return data;
   }
 };
@@ -442,7 +445,10 @@ const App = {
       await this._loadPage(pagina);
       switch (pagina) {
         case 'dashboard': this.renderDashboard(); break;
-      case 'pedidos':   this.renderPedidos();   break;
+      case 'pedidos':
+        this._populateProdutos();
+        this.renderPedidos();
+        break;
       case 'expedicao': this.renderExpedicao(); break;
       case 'concluidos': this.renderConcluidos(); break;
       case 'auditoria': this.renderAuditoria(); break;
@@ -727,15 +733,7 @@ const App = {
     document.getElementById('edit-titulo').textContent =
       `Editar — ${p.produto}${p.serie ? ' / ' + p.serie : ''}`;
 
-    // Popula select de produtos apenas uma vez
-    const selProd = document.getElementById('ed-produto');
-    if (selProd && selProd.options.length <= 1) {
-      PRODUTOS.forEach(pr => {
-        const opt = document.createElement('option');
-        opt.value = pr; opt.textContent = pr;
-        selProd.appendChild(opt);
-      });
-    }
+    this._populateProdutos();
 
     // ── COMERCIAL ──
     const sv = id => document.getElementById(id);
@@ -1474,6 +1472,95 @@ const App = {
       </label>`).join('');
   },
 
+  getProdutos() {
+    const produtos = Array.isArray(this.data?.produtos) ? this.data.produtos : [];
+    return [...new Set(produtos.map(p => String(p || '').trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  },
+
+  openProdutosModal() {
+    this.resetProdutoForm();
+    this.renderProdutosList();
+    this.openModal('produtos');
+  },
+
+  renderProdutosList() {
+    const container = document.getElementById('produtos-list');
+    if (!container) return;
+    const produtos = this.getProdutos();
+    if (!produtos.length) {
+      container.innerHTML = '<div class="empty-state">Nenhum produto cadastrado.</div>';
+      return;
+    }
+    container.innerHTML = `<table class="table"><thead><tr><th>Produto</th><th>Ações</th></tr></thead><tbody>${produtos.map(produto => `
+      <tr>
+        <td><strong>${escapar(produto)}</strong></td>
+        <td>
+          <div class="actions-cell">
+            <button class="btn-icon" onclick="App.editarProduto('${escapar(produto)}')" title="Editar">✏</button>
+            <button class="btn-icon danger" onclick="App.excluirProduto('${escapar(produto)}')" title="Excluir">✕</button>
+          </div>
+        </td>
+      </tr>`).join('')}</tbody></table>`;
+  },
+
+  salvarProduto(ev) {
+    ev.preventDefault();
+    const nome = (document.getElementById('produto-nome')?.value || '').trim();
+    const original = (document.getElementById('produto-original')?.value || '').trim();
+    if (!nome) {
+      this.toast('Informe o nome do produto.', 'error');
+      return;
+    }
+
+    const produtos = this.getProdutos();
+    const duplicado = produtos.some(p => p.toLowerCase() === nome.toLowerCase() && p !== original);
+    if (duplicado) {
+      this.toast('Este produto já está cadastrado.', 'error');
+      return;
+    }
+
+    this.data.produtos = original
+      ? produtos.map(p => p === original ? nome : p)
+      : [...produtos, nome];
+    this.data.produtos = this.getProdutos();
+
+    Store.save(this.data);
+    this.log(original ? 'Editar Produto' : 'Criar Produto', { produto: nome, original });
+    this.resetProdutoForm();
+    this.renderProdutosList();
+    this._populateProdutos();
+    this.toast('Produto salvo.', 'success');
+  },
+
+  editarProduto(produto) {
+    document.getElementById('produto-original').value = produto;
+    document.getElementById('produto-nome').value = produto;
+    document.getElementById('produto-nome').focus();
+  },
+
+  excluirProduto(produto) {
+    const emUso = (this.data.pedidos || []).some(p => p.produto === produto)
+      || (this.data.expedicao || []).some(e => e.equipamento === produto)
+      || (this.data.kits || []).some(k => k.produto === produto);
+    if (emUso) {
+      this.toast('Produto em uso em pedido, expedição ou kit. Não é possível excluir.', 'error');
+      return;
+    }
+    if (!confirm(`Excluir o produto ${produto}?`)) return;
+    this.data.produtos = this.getProdutos().filter(p => p !== produto);
+    Store.save(this.data);
+    this.log('Excluir Produto', { produto });
+    this.renderProdutosList();
+    this._populateProdutos();
+    this.toast('Produto excluído.', 'success');
+  },
+
+  resetProdutoForm() {
+    document.getElementById('produto-original').value = '';
+    document.getElementById('produto-nome').value = '';
+  },
+
   // ── KITS MANAGEMENT ──
   openKitsModal() {
     this._editingKitId = null;
@@ -1842,6 +1929,7 @@ const App = {
     const el = document.getElementById(`modal-${nome}`);
     if (el) el.classList.add('open');
     if (nome === 'nova-expedicao') this.renderChecklistAcessorios();
+    if (nome === 'novo-pedido') this._populateProdutos();
   },
 
   closeModal(nome) {
@@ -1863,14 +1951,25 @@ const App = {
   // ── INTERNOS ──
 
   _populateProdutos() {
-    const sel = document.getElementById('np-produto');
-    if (!sel) return;
-    sel.innerHTML = '<option value="">Selecione...</option>';
-    PRODUTOS.forEach(p => {
-      const opt = document.createElement('option');
-      opt.value = p; opt.textContent = p;
-      sel.appendChild(opt);
+    const produtos = this.getProdutos();
+    ['np-produto', 'ed-produto'].forEach(id => {
+      const sel = document.getElementById(id);
+      if (!sel) return;
+      const atual = sel.value;
+      sel.innerHTML = '<option value="">Selecione...</option>';
+      produtos.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p;
+        opt.textContent = p;
+        sel.appendChild(opt);
+      });
+      if (atual) sel.value = atual;
     });
+
+    const datalist = document.getElementById('produtos-datalist');
+    if (datalist) {
+      datalist.innerHTML = produtos.map(p => `<option value="${escapar(p)}"></option>`).join('');
+    }
   },
 
   _setDataHoje() {
