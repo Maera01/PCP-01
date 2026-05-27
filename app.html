@@ -1,0 +1,613 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Controle de Produção</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <!-- ✅ style.css na raiz -->
+  <link rel="stylesheet" href="style.css">
+  <style>
+    /* Container das páginas dinâmicas */
+    #page-content-container {
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    #page-content-container .page {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      padding: 24px;
+      gap: 20px;
+      overflow-y: auto;
+    }
+
+    #page-content-container .page.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-icon">⬡</div>
+    <div class="logo-text">
+      <span class="logo-title">PROD</span>
+      <span class="logo-sub">CONTROLE</span>
+    </div>
+  </div>
+  <nav class="sidebar-nav">
+    <button class="nav-item active" data-page="dashboard"
+      onclick="App.navigate('dashboard')">
+      <span class="nav-icon">◈</span><span>Dashboard</span>
+    </button>
+    <button class="nav-item" data-page="pedidos"
+      onclick="App.navigate('pedidos')">
+      <span class="nav-icon">◧</span><span>Pedidos</span>
+    </button>
+    <button class="nav-item" data-page="expedicao"
+      onclick="App.navigate('expedicao')">
+      <span class="nav-icon">◱</span><span>Expedição</span>
+    </button>
+    <button class="nav-item" data-page="concluidos"
+      onclick="App.navigate('concluidos')">
+      <span class="nav-icon">✔</span><span>Concluídos</span>
+    </button>
+    <button class="nav-item" data-page="auditoria"
+      onclick="App.navigate('auditoria')">
+      <span class="nav-icon">✎</span><span>Auditoria</span>
+    </button>
+    <button class="nav-item" data-page="usuarios"
+      onclick="App.navigate('usuarios')">
+      <span class="nav-icon">👤</span><span>Usuários</span>
+    </button>
+  </nav>
+  <div class="sidebar-footer">
+    <div class="data-info">
+      <span id="total-registros"
+        style="color:var(--text);font-size:11px">—</span>
+      <span id="ultima-atualizacao"
+        style="font-size:9px;letter-spacing:1px;
+               text-transform:uppercase;color:var(--text-muted)">—</span>
+    </div>
+    <button
+      onclick="Auth.logout()"
+      style="
+        margin-top:10px;width:100%;background:none;
+        border:1px solid var(--border);border-radius:var(--radius);
+        color:var(--text-muted);font-family:var(--font-mono);
+        font-size:10px;letter-spacing:1px;padding:7px;cursor:pointer;
+        transition:all .15s;text-transform:uppercase;
+      "
+      onmouseover="this.style.borderColor='var(--danger)';
+                   this.style.color='var(--danger)'"
+      onmouseout="this.style.borderColor='var(--border)';
+                  this.style.color='var(--text-muted)'"
+    >⏻ Sair</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="sidebar-toggle btn-icon"
+        onclick="App.toggleSidebar()">☰</button>
+      <h1 class="page-title" id="page-title">Dashboard</h1>
+    </div>
+    <div class="topbar-right">
+      <button class="btn btn-primary" id="btn-novo-item"
+        onclick="App.paginaAtual === 'expedicao'
+          ? App.openModal('nova-expedicao')
+          : App.openModal('novo-pedido')">
+        + Novo Pedido
+      </button>
+      <button class="btn btn-secondary" onclick="App.openKitsModal()">Kits</button>
+      <button class="btn btn-secondary"
+        onclick="App.exportarDados()">↓ Exportar</button>
+    </div>
+  </header>
+
+  <!-- CONTAINER DAS PÁGINAS DINÂMICAS -->
+  <div id="page-content-container"></div>
+</main>
+
+<!-- ====== MODAL VER PEDIDO ====== -->
+<div class="modal-overlay" id="modal-ver-pedido"
+  onclick="if(event.target===this)App.closeModal('ver-pedido')">
+  <div class="modal modal-large" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="ver-titulo">Detalhes do Pedido</h2>
+      <button class="modal-close"
+        onclick="App.closeModal('ver-pedido')">✕</button>
+    </div>
+    <div class="modal-body" id="ver-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary"
+        onclick="App.closeModal('ver-pedido')">Fechar</button>
+    </div>
+  </div>
+</div>
+    <!-- ====== MODAL KITS ====== -->
+    <div class="modal-overlay" id="modal-kits"
+      onclick="if(event.target===this)App.closeModal('kits')">
+      <div class="modal modal-large" onclick="event.stopPropagation()">
+        <div class="modal-header">
+          <h2>Kits de Acessórios</h2>
+          <button class="modal-close" onclick="App.closeModal('kits')">✕</button>
+        </div>
+        <div class="modal-body">
+          <div style="display:flex;gap:16px">
+            <div style="flex:1;max-width:420px">
+              <div id="kits-list"></div>
+            </div>
+            <div style="flex:1">
+              <form id="form-kit" onsubmit="App.salvarKit(event)">
+                <div class="form-group">
+                  <label>Equipamento</label>
+                  <input class="input" id="kit-produto" placeholder="Ex: ASE100" required />
+                </div>
+                <div class="form-group">
+                  <label>Nome do Kit</label>
+                  <input class="input" id="kit-nome" placeholder="Ex: Padrão" required />
+                </div>
+                <div class="form-group form-group-full">
+                  <label>Itens (uma linha por item)</label>
+                  <textarea class="textarea" id="kit-itens" rows="6" placeholder="Cabo\nManual\nFonte" required></textarea>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:8px">
+                  <button type="button" class="btn btn-secondary" onclick="App.resetKitForm()">Limpar</button>
+                  <button type="submit" class="btn btn-primary">Salvar Kit</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+<!-- ====== MODAL EDITAR PEDIDO ====== -->
+<div class="modal-overlay" id="modal-editar-pedido"
+  onclick="if(event.target===this)App.closeModal('editar-pedido')">
+  <div class="modal modal-large" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="edit-titulo">Editar Pedido</h2>
+      <button class="modal-close"
+        onclick="App.closeModal('editar-pedido')">✕</button>
+    </div>
+    <div class="modal-body" style="padding:0;display:flex;flex-direction:column;overflow:hidden">
+
+      <!-- ABAS -->
+      <div class="edit-tabs">
+        <button class="edit-tab active" id="tab-com"
+          onclick="App.editTab('comercial')">
+          💼 Comercial
+        </button>
+        <button class="edit-tab" id="tab-alm"
+          onclick="App.editTab('almoxarifado')">
+          📦 Almoxarifado
+        </button>
+        <button class="edit-tab" id="tab-prod"
+          onclick="App.editTab('producao')">
+          ⚙ Produção
+        </button>
+      </div>
+
+      <!-- PAINEL COMERCIAL -->
+      <div class="edit-panel active" id="panel-comercial"
+        style="padding:22px;display:block;overflow-y:auto;flex:1">
+        <div class="edit-section-title">Informações Comerciais</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Produto *</label>
+            <select class="input" id="ed-produto">
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Cliente</label>
+            <input class="input" id="ed-cliente"
+              placeholder="Nome do cliente"/>
+          </div>
+          <div class="form-group">
+            <label>Cor</label>
+            <select class="input" id="ed-cor">
+              <option value="">—</option>
+              <option>Laranja</option>
+              <option>Azul</option>
+              <option>Preto</option>
+              <option>Branco</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Quantidade</label>
+            <input class="input" type="number"
+              id="ed-quantidade" min="1" value="1"/>
+          </div>
+          <div class="form-group">
+            <label>Situação</label>
+            <select class="input" id="ed-situacao">
+              <option>VENDIDO</option>
+              <option>LOCADO</option>
+              <option>DEMONSTRAÇÃO</option>
+              <option>EMPRÉSTIMO</option>
+              <option>ESTOQUE LOCAÇÃO</option>
+              <option>VENDA PROMISSORA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Data do Pedido</label>
+            <input class="input" type="date" id="ed-datapedido"/>
+          </div>
+          <div class="form-group form-group-full">
+            <label>Prazo de Produção</label>
+            <input class="input" type="date" id="ed-prazo"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAINEL ALMOXARIFADO -->
+      <div class="edit-panel" id="panel-almoxarifado"
+        style="padding:22px;display:none;overflow-y:auto;flex:1">
+        <div class="edit-section-title">Dados de Almoxarifado</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>N° Série</label>
+            <input class="input" id="ed-serie"
+              placeholder="Ex: 20260115001"/>
+          </div>
+          <div class="form-group">
+            <label>Status Separação</label>
+            <select class="input" id="ed-statussep">
+              <option>Separado</option>
+              <option>Em Separação</option>
+              <option>Faltando MP</option>
+              <option>Separação Parcial</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Data da Separação</label>
+            <input class="input" type="date" id="ed-datsep"/>
+          </div>
+          <div class="form-group">
+            <label>Faltante?</label>
+            <select class="input" id="ed-matfaltante">
+              <option value="">—</option>
+              <option>Sim</option>
+              <option>Não</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Data Entrega Parcial</label>
+            <input class="input" type="date" id="ed-entparcial"
+              onchange="App.toggleCamposPecas()"/>
+          </div>
+          <div class="form-group">
+            <label>Data Entrega Total</label>
+            <input class="input" type="date" id="ed-enttotal"/>
+          </div>
+          <div class="form-group pecas-parcial">
+            <label>Data Pedido de Peças</label>
+            <input class="input" type="date" id="ed-datapedidopecas"/>
+          </div>
+          <div class="form-group pecas-parcial">
+            <label>Data Retorno</label>
+            <input class="input" type="date" id="ed-dataretornopecas"/>
+          </div>
+          <div class="form-group form-group-full pecas-parcial">
+            <label>Peças Pedidas</label>
+            <textarea class="textarea" id="ed-pecaspedidas" rows="3"></textarea>
+          </div>
+          <div class="form-group form-group-full">
+            <label>Observação</label>
+            <textarea class="textarea" id="ed-obs" rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+
+      <!-- PAINEL PRODUÇÃO -->
+      <div class="edit-panel" id="panel-producao"
+        style="padding:22px;display:none;overflow-y:auto;flex:1">
+        <div class="edit-section-title">Etapas de Produção</div>
+        <div id="etapas-edit-form"></div>
+      </div>
+
+    </div>
+
+    <!-- RODAPÉ DO MODAL -->
+    <div style="display:flex;justify-content:flex-end;gap:10px;
+      padding:16px 22px;border-top:1px solid var(--border);
+      background:var(--bg-2);flex-shrink:0">
+      <button class="btn btn-secondary"
+        onclick="App.closeModal('editar-pedido')">Cancelar</button>
+      <button class="btn btn-primary"
+        onclick="App.salvarEdicao()">Salvar Alterações</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ====== MODAL FINALIZAR PEDIDO ====== -->
+<div class="modal-overlay" id="modal-finalizar-pedido"
+  onclick="if(event.target===this)App.closeModal('finalizar-pedido')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="fin-titulo">Finalizar Pedido</h2>
+      <button class="modal-close"
+        onclick="App.closeModal('finalizar-pedido')">✕</button>
+    </div>
+    <form class="modal-body" id="form-finalizar-pedido"
+      onsubmit="App.salvarFinalizacaoPedido(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Equipamento</label>
+          <input class="input" id="fin-equipamento" disabled/>
+        </div>
+        <div class="form-group">
+          <label>N° Série</label>
+          <input class="input" id="fin-serie" disabled/>
+        </div>
+        <div class="form-group">
+          <label>Data envio para Expedição</label>
+          <input class="input" type="date" id="fin-data"/>
+        </div>
+        <div class="form-group">
+          <label>Kit de acessórios</label>
+          <select class="input" id="fin-kit" onchange="App.renderChecklistFinalizacao()">
+            <option value="">— Personalizado —</option>
+          </select>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Acessórios enviados com o equipamento *</label>
+          <textarea class="textarea" id="fin-acessorios" rows="5"
+            placeholder="Informe um acessório por linha" oninput="App.renderChecklistFinalizacao()"></textarea>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Checklist de Acessórios</label>
+          <div class="checklist-box" id="fin-checklist-acessorios">
+            Cadastre os acessórios ou selecione um kit para liberar a conferência.
+          </div>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Observação para Expedição</label>
+          <textarea class="textarea" id="fin-obs" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+          onclick="App.closeModal('finalizar-pedido')">Cancelar</button>
+        <button type="submit" class="btn btn-primary">Enviar para Expedição</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+
+<!-- ====== MODAL NOVO PEDIDO ====== -->
+<div class="modal-overlay" id="modal-novo-pedido"
+  onclick="if(event.target===this)App.closeModal('novo-pedido')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Novo Pedido</h2>
+      <button class="modal-close"
+        onclick="App.closeModal('novo-pedido')">✕</button>
+    </div>
+    <form class="modal-body" id="form-novo-pedido"
+      onsubmit="App.salvarPedido(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Produto *</label>
+          <select class="input" id="np-produto" required>
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>N° Série</label>
+          <input class="input" id="np-serie"
+            placeholder="Ex: 20260115001"/>
+        </div>
+        <div class="form-group">
+          <label>Cliente</label>
+          <input class="input" id="np-cliente"
+            placeholder="Nome do cliente"/>
+        </div>
+        <div class="form-group">
+          <label>Cor</label>
+          <select class="input" id="np-cor">
+            <option value="">—</option>
+            <option>Laranja</option>
+            <option>Azul</option>
+            <option>Preto</option>
+            <option>Branco</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input class="input" type="number"
+            id="np-quantidade" min="1" value="1"/>
+        </div>
+        <div class="form-group">
+          <label>Situação</label>
+          <select class="input" id="np-situacao">
+            <option>VENDIDO</option>
+            <option>LOCADO</option>
+            <option>DEMONSTRAÇÃO</option>
+            <option>EMPRÉSTIMO</option>
+            <option>ESTOQUE LOCAÇÃO</option>
+            <option>VENDA PROMISSORA</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data do Pedido</label>
+          <input class="input" type="date" id="np-data-pedido"/>
+        </div>
+        <div class="form-group">
+          <label>Prazo de Produção</label>
+          <input class="input" type="date" id="np-prazo"/>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Observação</label>
+          <textarea class="textarea" id="np-observacao"
+            rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+          onclick="App.closeModal('novo-pedido')">Cancelar</button>
+        <button type="submit"
+          class="btn btn-primary">Criar Pedido</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ====== MODAL NOVA EXPEDIÇÃO ====== -->
+<div class="modal-overlay" id="modal-nova-expedicao"
+  onclick="if(event.target===this)App.closeModal('nova-expedicao')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2>Nova Expedição</h2>
+      <button class="modal-close"
+        onclick="App.closeModal('nova-expedicao')">✕</button>
+    </div>
+    <form class="modal-body" id="form-expedicao"
+      onsubmit="App.salvarExpedicao(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Equipamento *</label>
+          <input class="input" id="ex-equipamento" required/>
+        </div>
+        <div class="form-group">
+          <label>N° Série</label>
+          <input class="input" id="ex-serie"/>
+        </div>
+        <div class="form-group">
+          <label>Quantidade</label>
+          <input class="input" type="number"
+            id="ex-quantidade" value="1" min="1"/>
+        </div>
+        <div class="form-group">
+          <label>Cor</label>
+          <select class="input" id="ex-cor">
+            <option value="">—</option>
+            <option>Laranja</option>
+            <option>Azul</option>
+            <option>Preto</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Observação</label>
+          <input class="input" id="ex-obs"
+            placeholder="Ex: Locação"/>
+        </div>
+        <div class="form-group">
+          <label>Data Entrega *</label>
+          <input class="input" type="date" id="ex-data" required/>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Acessórios do Equipamento</label>
+          <textarea class="textarea" id="ex-acessorios" rows="3"
+            placeholder="Informe um acessório por linha"
+            oninput="App.renderChecklistAcessorios()"></textarea>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Checklist de Acessórios</label>
+          <div class="checklist-box" id="ex-checklist-acessorios">
+            Cadastre os acessórios para liberar a conferência.
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+          onclick="App.closeModal('nova-expedicao')">Cancelar</button>
+        <button type="submit"
+          class="btn btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- ====== MODAL CONFERIR EXPEDIÇÃO ====== -->
+<div class="modal-overlay" id="modal-conferir-expedicao"
+  onclick="if(event.target===this)App.closeModal('conferir-expedicao')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="conf-exp-titulo">Conferir Expedição</h2>
+      <button class="modal-close"
+        onclick="App.closeModal('conferir-expedicao')">✕</button>
+    </div>
+    <form class="modal-body" id="form-conferir-expedicao"
+      onsubmit="App.salvarConferenciaExpedicao(event)">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Equipamento</label>
+          <input class="input" id="conf-exp-equipamento" disabled/>
+        </div>
+        <div class="form-group">
+          <label>N° Série</label>
+          <input class="input" id="conf-exp-serie" disabled/>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Checklist de Acessórios</label>
+          <div class="checklist-box" id="conf-exp-checklist"></div>
+        </div>
+        <div class="form-group form-group-full" id="conf-exp-kitinfo-container" style="display:none">
+          <label>Kit enviado</label>
+          <div class="obs-box" id="conf-exp-kitinfo"></div>
+        </div>
+        <div class="form-group form-group-full" id="conf-exp-producao-container" style="display:none">
+          <label>Histórico de Produção</label>
+          <div class="obs-box" id="conf-exp-producao"></div>
+        </div>
+        <div class="form-group">
+          <label>Estado geral do equipamento</label>
+          <select class="input" id="conf-exp-estado">
+            <option value="">Selecione...</option>
+            <option>Aprovado</option>
+            <option>Reprovado</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Aceite equipamento</label>
+          <select class="input" id="conf-exp-aceite-equip">
+            <option value="">Selecione...</option>
+            <option>Sim</option>
+            <option>Não</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Aceite acessórios</label>
+          <select class="input" id="conf-exp-aceite-acess">
+            <option value="">Selecione...</option>
+            <option>Sim</option>
+            <option>Não</option>
+          </select>
+        </div>
+        <div class="form-group form-group-full">
+          <label>Observação da conferência</label>
+          <textarea class="textarea" id="conf-exp-obs" rows="3"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary"
+          onclick="App.closeModal('conferir-expedicao')">Cancelar</button>
+        <button id="conf-exp-save-button" type="submit" class="btn btn-primary">Salvar Conferência</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ✅ auth.js ANTES do app.js — ambos em js/ -->
+<script src="js/auth.js"></script>
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

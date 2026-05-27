@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>Controle de Produção — Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <!-- ✅ style.css na raiz -->
+  <link rel="stylesheet" href="style.css">
+  <style>
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg);
+    }
+
+    .login-wrap {
+      width: 100%;
+      max-width: 400px;
+      padding: 20px;
+    }
+
+    .login-box {
+      background: var(--bg-2);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+      padding: 40px 36px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+    }
+
+    .login-logo {
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .login-logo-icon {
+      font-size: 48px;
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--accent-glow);
+      line-height: 1;
+    }
+
+    .login-logo-title {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 22px;
+      letter-spacing: 6px;
+      color: var(--accent);
+    }
+
+    .login-logo-sub {
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .login-divider {
+      height: 1px;
+      background: var(--border);
+    }
+
+    .login-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .login-form .form-group label {
+      font-size: 10px;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      margin-bottom: 6px;
+      display: block;
+    }
+
+    .login-form .input {
+      width: 100%;
+      font-size: 14px;
+      padding: 10px 14px;
+    }
+
+    .login-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 11px;
+      font-size: 14px;
+      letter-spacing: 1px;
+      margin-top: 4px;
+    }
+
+    .login-error {
+      background: var(--danger-dim);
+      border: 1px solid var(--danger);
+      border-radius: var(--radius);
+      padding: 10px 14px;
+      font-size: 11px;
+      color: var(--danger);
+      font-family: var(--font-mono);
+      letter-spacing: 0.5px;
+      display: none;
+      text-align: center;
+    }
+
+    .login-error.show { display: block; }
+
+    .login-footer {
+      text-align: center;
+      font-family: var(--font-mono);
+      font-size: 9px;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      opacity: 0.6;
+    }
+
+    .login-hint {
+      background: var(--bg-3);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-family: var(--font-mono);
+      font-size: 10px;
+      color: var(--text-muted);
+      line-height: 1.8;
+    }
+
+    .login-hint strong {
+      color: var(--accent);
+      display: block;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    .login-hint span {
+      display: flex;
+      justify-content: space-between;
+      padding: 1px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .login-hint span:last-child { border-bottom: none; }
+    .login-hint .u { color: var(--text); }
+    .login-hint .p { color: var(--warning); }
+  </style>
+</head>
+<body>
+
+<div class="login-wrap">
+  <div class="login-box">
+
+    <!-- LOGO -->
+    <div class="login-logo">
+      <span class="login-logo-icon">⬡</span>
+      <span class="login-logo-title">PROD</span>
+      <span class="login-logo-sub">Controle de Produção</span>
+    </div>
+
+    <div class="login-divider"></div>
+
+    <!-- FORMULÁRIO -->
+    <form class="login-form" onsubmit="fazerLogin(event)" autocomplete="off">
+      <div class="form-group">
+        <label>Usuário</label>
+        <input class="input" type="text" id="login-user"
+          placeholder="Digite seu usuário" required/>
+      </div>
+      <div class="form-group">
+        <label>Senha</label>
+        <input class="input" type="password" id="login-senha"
+          placeholder="Digite sua senha" required/>
+      </div>
+
+      <div class="login-error" id="login-erro">
+        ✕ Usuário ou senha incorretos.
+      </div>
+
+      <button type="submit" class="btn btn-primary login-btn">
+        Entrar →
+      </button>
+    </form>
+
+    <!-- REFERÊNCIA DE USUÁRIOS -->
+    <div class="login-hint">
+      <strong>◈ ACESSOS DISPONÍVEIS</strong>
+      <span><span class="u">admin</span><span class="p">admin123</span></span>
+      <span><span class="u">comercial</span><span class="p">com123</span></span>
+      <span><span class="u">almoxarifado</span><span class="p">alm123</span></span>
+      <span><span class="u">producao</span><span class="p">prod123</span></span>
+      <span><span class="u">expedicao</span><span class="p">exp123</span></span>
+    </div>
+
+    <div class="login-footer">Sistema Interno — Acesso Restrito</div>
+
+  </div>
+</div>
+
+<!-- ✅ auth.js está em js/ -->
+<script src="js/auth.js"></script>
+<script>
+  // ✅ app.html está na raiz, mesmo nível do index.html
+  if (Auth.getSessao()) window.location.href = 'app.html';
+
+  function fazerLogin(ev) {
+    ev.preventDefault();
+    const user  = document.getElementById('login-user').value;
+    const senha = document.getElementById('login-senha').value;
+    const erro  = document.getElementById('login-erro');
+
+    if (Auth.login(user, senha)) {
+      // ✅ app.html na raiz
+      window.location.href = 'app.html';
+    } else {
+      erro.classList.add('show');
+      document.getElementById('login-senha').value = '';
+      document.getElementById('login-senha').focus();
+      setTimeout(() => erro.classList.remove('show'), 3000);
+    }
+  }
+</script>
+</body>
+</html>

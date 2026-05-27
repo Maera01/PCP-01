@@ -1,0 +1,36 @@
+<div class="page" id="page-pedidos">
+  <div class="toolbar">
+    <div class="filters">
+      <input class="input-search" id="busca-pedido" placeholder="Buscar produto, série, cliente..." oninput="App.filtrarPedidos()"/>
+      <select class="select-filter" id="filtro-status" onchange="App.filtrarPedidos()">
+        <option value="">Todos os status</option>
+        <option value="Produzido">Produzido</option>
+        <option value="ATRASADO">Atrasado</option>
+        <option value="Separado">Separado</option>
+        <option value="Em Separação">Em Separação</option>
+        <option value="Faltando MP">Faltando MP</option>
+      </select>
+      <select class="select-filter" id="filtro-vencimento" onchange="App.filtrarPedidos()">
+        <option value="">Todas situações</option>
+        <option value="VENDIDO">Vendido</option>
+        <option value="LOCADO">Locado</option>
+        <option value="DEMONSTRAÇÃO">Demonstração</option>
+        <option value="EMPRÉSTIMO">Empréstimo</option>
+        <option value="ESTOQUE LOCAÇÃO">Estoque Locação</option>
+      </select>
+    </div>
+    <span class="count-badge" id="count-pedidos">0 pedidos</span>
+  </div>
+  <div class="card">
+    <div class="table-wrapper">
+      <table class="table">
+        <thead><tr>
+          <th>Produto</th><th>Série</th><th>Cliente</th><th>Cor</th><th>Qtd</th>
+          <th>Data Pedido</th><th>Prazo</th><th>Vencimento</th><th>Status Sep.</th>
+          <th>Etapa Atual</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbody-pedidos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,15 @@
+<div class="page" id="page-auditoria">
+  <h2>Auditoria</h2>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div id="count-auditoria">0 registros</div>
+    <div>
+      <input class="input" id="busca-auditoria" placeholder="Filtro" oninput="App.renderAuditoria()" />
+    </div>
+  </div>
+  <div style="overflow:auto">
+    <table class="table">
+      <thead><tr><th>Data</th><th>Usuário</th><th>Perfil</th><th>Ação</th><th>Detalhes</th></tr></thead>
+      <tbody id="tbody-auditoria"></tbody>
+    </table>
+  </div>
+</div>

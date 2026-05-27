@@ -1,0 +1,93 @@
+<div class="page" id="page-usuarios">
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:16px">
+    <div>
+      <h2>Usuários</h2>
+      <p style="margin:6px 0 0;color:var(--text-muted);font-size:13px">
+        Crie logins e defina quais abas o usuário vê e o que ele pode editar.
+      </p>
+    </div>
+    <button class="btn btn-primary" onclick="App.abrirUsuarioModal()">+ Novo Usuário</button>
+  </div>
+
+  <div class="page-card" style="margin-top:18px;overflow-x:auto">
+    <table class="table" style="width:100%;min-width:720px">
+      <thead>
+        <tr>
+          <th>Nome</th>
+          <th>Login</th>
+          <th>Perfil</th>
+          <th>Abas</th>
+          <th>Edição</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody id="tbody-usuarios"></tbody>
+    </table>
+  </div>
+  <div class="empty-state" id="usuarios-empty" style="display:none;margin-top:16px">
+    <span class="empty-icon">👤</span>Nenhum usuário cadastrado.
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-usuario" onclick="if(event.target===this)App.closeModal('usuario')">
+  <div class="modal modal-large" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h2 id="usuario-modal-titulo">Novo Usuário</h2>
+      <button class="modal-close" onclick="App.closeModal('usuario')">✕</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-usuario" onsubmit="App.salvarUsuario(event)">
+        <input type="hidden" id="user-id" />
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Nome</label>
+            <input class="input" id="user-nome" required />
+          </div>
+          <div class="form-group">
+            <label>Login</label>
+            <input class="input" id="user-login" required />
+          </div>
+          <div class="form-group">
+            <label>Senha</label>
+            <input class="input" id="user-senha" type="password" required />
+          </div>
+          <div class="form-group">
+            <label>Perfil</label>
+            <select class="input" id="user-perfil">
+              <option value="admin">Admin</option>
+              <option value="comercial">Comercial</option>
+              <option value="almoxarifado">Almoxarifado</option>
+              <option value="producao">Produção</option>
+              <option value="expedicao">Expedição</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-section-title">Abas visíveis</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:12px;margin-bottom:16px">
+          <label class="checkbox-label"><input type="checkbox" id="user-pg-dashboard"/> Dashboard</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-pg-pedidos"/> Pedidos</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-pg-expedicao"/> Expedição</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-pg-concluidos"/> Concluídos</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-pg-auditoria"/> Auditoria</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-pg-usuarios"/> Usuários</label>
+        </div>
+
+        <div class="form-section-title">Permissões de edição</div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(160px,1fr));gap:12px">
+          <label class="checkbox-label"><input type="checkbox" id="user-can-criarPedido"/> Criar pedido</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-can-editarComercial"/> Editar comercial</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-can-editarAlmoxarifado"/> Editar almoxarifado</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-can-editarProducao"/> Editar produção</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-can-editarExpedicao"/> Editar expedição</label>
+          <label class="checkbox-label"><input type="checkbox" id="user-can-exportar"/> Exportar</label>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:22px">
+          <button type="button" class="btn btn-secondary" onclick="App.closeModal('usuario')">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar usuário</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,66 @@
+<div class="page active" id="page-dashboard">
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">Total Pedidos</div>
+      <div class="kpi-value" id="kpi-total">0</div>
+      <div class="kpi-sub">registrados</div>
+    </div>
+    <div class="kpi-card kpi-warning">
+      <div class="kpi-label">Em Produção</div>
+      <div class="kpi-value" id="kpi-producao">0</div>
+      <div class="kpi-sub">em andamento</div>
+    </div>
+    <div class="kpi-card kpi-success">
+      <div class="kpi-label">Concluídos</div>
+      <div class="kpi-value" id="kpi-concluidos">0</div>
+      <div class="kpi-sub">entregues</div>
+    </div>
+    <div class="kpi-card kpi-danger">
+      <div class="kpi-label">Em Atraso</div>
+      <div class="kpi-value" id="kpi-atraso">0</div>
+      <div class="kpi-sub">pedidos</div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <div class="card">
+      <div class="card-header">
+        <h2>Pedidos Recentes</h2>
+        <!-- Badge indicando somente leitura -->
+        <span style="
+          font-family:var(--font-mono);
+          font-size:10px;
+          color:var(--text-muted);
+          background:var(--bg-4);
+          padding:3px 10px;
+          border-radius:20px;
+          border:1px solid var(--border);
+          letter-spacing:1px;
+        ">◉ VISUALIZAÇÃO</span>
+      </div>
+      <div class="card-body">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Produto</th>
+              <th>Série</th>
+              <th>Prazo</th>
+              <th>Status</th>
+              <th>Etapa</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-recentes"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Por Equipamento</h2>
+      </div>
+      <div class="card-body">
+        <div class="bar-chart" id="chart-equip"></div>
+      </div>
+    </div>
+  </div>
+</div>
