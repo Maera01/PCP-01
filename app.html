@@ -172,11 +172,11 @@
           <button class="modal-close" onclick="App.closeModal('kits')">✕</button>
         </div>
         <div class="modal-body">
-          <div style="display:flex;gap:16px">
-            <div style="flex:1;max-width:420px">
+          <div class="kits-layout">
+            <div class="kits-list-panel">
               <div id="kits-list"></div>
             </div>
-            <div style="flex:1">
+            <div class="kits-form-panel">
               <form id="form-kit" onsubmit="App.salvarKit(event)">
                 <div class="form-group">
                   <label>Equipamento</label>
