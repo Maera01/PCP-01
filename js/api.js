@@ -7,8 +7,10 @@
 const API = {
   BASE_URL: (() => {
     const host = window.location.hostname;
-    const port = 3000;
-    return `http://${host}:${port}/api`;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:3000/api';
+    }
+    return 'https://pcp-1e06.onrender.com/api';
   })(),
   _serverAvailable: null,
   _syncInterval: null,
