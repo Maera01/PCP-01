@@ -762,27 +762,53 @@ select option { background: var(--bg-2); }
 
 .production-history-summary {
   margin-top: 8px;
-  padding: 8px 10px;
+  padding: 0;
   border-left: 3px solid var(--accent);
   background: var(--accent-dim);
   border-radius: var(--radius);
   color: var(--text);
   font-size: 12px;
+  overflow: hidden;
 }
 
-.production-history-summary strong {
+.production-history-summary summary {
+  cursor: pointer;
   display: block;
-  margin-bottom: 6px;
   color: var(--accent);
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 1px;
+  list-style: none;
+  padding: 8px 10px;
   text-transform: uppercase;
+  user-select: none;
+}
+
+.production-history-summary summary::-webkit-details-marker {
+  display: none;
+}
+
+.production-history-summary summary::after {
+  content: '+';
+  float: right;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.production-history-summary[open] summary {
+  border-bottom: 1px solid var(--border);
+}
+
+.production-history-summary[open] summary::after {
+  content: '-';
+}
+
+.production-history-item {
+  padding: 8px 10px;
 }
 
 .production-history-item + .production-history-item {
-  margin-top: 7px;
-  padding-top: 7px;
+  padding-top: 8px;
   border-top: 1px solid var(--border);
 }
 

@@ -1180,8 +1180,8 @@ const App = {
     if (!problemas.length) return '';
 
     return `
-      <div class="production-history-summary">
-        <strong>Histórico de Produção</strong>
+      <details class="production-history-summary">
+        <summary>Histórico de Produção (${problemas.length})</summary>
         ${problemas.map(p => `
           <div class="production-history-item">
             <span>${escapar(p.etapa)}: ${escapar(p.problema)}</span>
@@ -1189,7 +1189,7 @@ const App = {
             ${(p.saida || p.retorno) ? `
               <small>Saída: ${fmtData(p.saida)} · Retorno: ${fmtData(p.retorno)}</small>` : ''}
           </div>`).join('')}
-      </div>`;
+      </details>`;
   },
 
   renderConcluidos(lista) {
