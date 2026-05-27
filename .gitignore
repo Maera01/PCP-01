@@ -5,6 +5,7 @@ server/node_modules/
 gitrepo/
 upload-test/
 git-data/
+.npm-cache/
 
 *.db
 *.db-*

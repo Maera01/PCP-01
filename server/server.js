@@ -2,11 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
+const { Pool } = require('pg');
 const path = require('path');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'controle_producao.db');
+const USE_POSTGRES = Boolean(process.env.DATABASE_URL);
 
 // Middlewares
 app.use(cors());
@@ -18,7 +20,21 @@ app.use(express.static(path.join(__dirname, '..')));
 
 // ── DATABASE INIT ──
 let db;
+let pool;
 const initDB = () => {
+  if (USE_POSTGRES) {
+    pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production'
+        ? { rejectUnauthorized: false }
+        : false
+    });
+
+    return createTables().then(() => {
+      console.log('Conectado ao PostgreSQL');
+    });
+  }
+
   return new Promise((resolve, reject) => {
     db = new sqlite3.Database(DB_PATH, (err) => {
       if (err) {
@@ -33,6 +49,17 @@ const initDB = () => {
 };
 
 const createTables = () => {
+  if (USE_POSTGRES) {
+    return pool.query(`
+      CREATE TABLE IF NOT EXISTS app_data (
+        id SERIAL PRIMARY KEY,
+        data_key TEXT UNIQUE,
+        data_value TEXT,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  }
+
   return new Promise((resolve, reject) => {
     db.serialize(() => {
       // Tabela de dados globais (pedidos, kits, logs, etc)
@@ -53,6 +80,17 @@ const createTables = () => {
 
 // ── HELPER: Salvar/Carregar dados JSON na tabela ──
 const saveData = (key, value) => {
+  if (USE_POSTGRES) {
+    const json = JSON.stringify(value);
+    return pool.query(
+      `INSERT INTO app_data (data_key, data_value, updated_at)
+       VALUES ($1, $2, CURRENT_TIMESTAMP)
+       ON CONFLICT (data_key)
+       DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
+      [key, json]
+    );
+  }
+
   return new Promise((resolve, reject) => {
     const json = JSON.stringify(value);
     db.run(
@@ -67,6 +105,15 @@ const saveData = (key, value) => {
 };
 
 const loadData = (key) => {
+  if (USE_POSTGRES) {
+    return pool
+      .query(`SELECT data_value FROM app_data WHERE data_key = $1`, [key])
+      .then(result => {
+        const value = result.rows[0]?.data_value;
+        return value ? JSON.parse(value) : null;
+      });
+  }
+
   return new Promise((resolve, reject) => {
     db.get(
       `SELECT data_value FROM app_data WHERE data_key = ?`,
@@ -147,7 +194,7 @@ const startServer = async () => {
       }
       console.log(`✓ Servidor rodando em http://${localIP}:${PORT}`);
       console.log(`✓ URL Local: http://localhost:${PORT}`);
-      console.log(`✓ Banco de dados: ${DB_PATH}`);
+      console.log(`✓ Banco de dados: ${USE_POSTGRES ? 'PostgreSQL' : DB_PATH}`);
       console.log(`✓ API endpoints:`);
       console.log(`  GET  /api/data       - Carregar dados`);
       console.log(`  POST /api/data       - Salvar dados`);
