@@ -1192,6 +1192,22 @@ const App = {
       </details>`;
   },
 
+  compactarHistoricoProducao() {
+    document.querySelectorAll('.production-history-summary').forEach(box => {
+      if (box.tagName.toLowerCase() === 'details') return;
+
+      const title = box.querySelector('strong');
+      const count = box.querySelectorAll('.production-history-item').length;
+      const details = document.createElement('details');
+      details.className = box.className;
+      details.innerHTML = `
+        <summary>${title?.textContent || 'Histórico de Produção'}${count ? ` (${count})` : ''}</summary>
+        ${[...box.querySelectorAll('.production-history-item')].map(item => item.outerHTML).join('')}
+      `;
+      box.replaceWith(details);
+    });
+  },
+
   renderConcluidos(lista) {
     lista = lista ?? this.getConcluidos();
     const tbody = document.getElementById('tbody-concluidos');
@@ -1227,6 +1243,8 @@ const App = {
             </div>
           </td>
         </tr>`).join('');
+
+    this.compactarHistoricoProducao();
   },
 
   renderAuditoria() {
