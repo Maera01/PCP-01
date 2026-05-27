@@ -190,41 +190,62 @@ const KITS_ACESSORIOS = {
 const Store = {
   _key: 'controle_producao_v2',
   load() {
-    // Usa API se disponível, fallback para localStorage
     try {
       const raw = localStorage.getItem(this._key);
       if (raw) return JSON.parse(raw);
     } catch(e) {}
     return null;
   },
+  seedData() {
+    const kits = Object.entries(KITS_ACESSORIOS).map(([produto, itens]) => ({
+      id: 'kit-' + produto,
+      produto,
+      nome: 'Padrão',
+      itens: itens.slice()
+    }));
+    return {
+      pedidos:   SEED_PEDIDOS,
+      expedicao: SEED_EXPEDICAO,
+      kits:      kits,
+      logs:      [],
+      criadoEm:  new Date().toISOString()
+    };
+  },
   async save(data) {
-    // Usa API se disponível, sempre salva em localStorage também
     if (typeof API !== 'undefined') {
       await API.saveData(data);
     } else {
       localStorage.setItem(this._key, JSON.stringify(data));
     }
   },
-  init() {
+  async init() {
+    let data = null;
+
+    if (typeof API !== 'undefined') {
+      data = await API.loadData();
+    }
+
+    if (!data) {
+      data = this.load();
+    }
+
+    if (!data) {
+      data = this.seedData();
+      await this.save(data);
+    }
+
+    if (!data.logs) data.logs = [];
+    if (!data.kits) data.kits = [];
+    if (!data.pedidos) data.pedidos = [];
+    if (!data.expedicao) data.expedicao = [];
+    return data;
+  },
+  initLocal() {
     let data = this.load();
     if (!data) {
-      // Inicializa com kits a partir de KITS_ACESSORIOS
-      const kits = Object.entries(KITS_ACESSORIOS).map(([produto, itens]) => ({
-        id: 'kit-' + produto,
-        produto,
-        nome: 'Padrão',
-        itens: itens.slice()
-      }));
-      data = {
-        pedidos:   SEED_PEDIDOS,
-        expedicao: SEED_EXPEDICAO,
-        kits:      kits,
-        logs:      [],
-        criadoEm:  new Date().toISOString()
-      };
+      data = this.seedData();
       this.save(data);
     }
-    // ensure logs present on older datasets
     if (!data.logs) data.logs = [];
     return data;
   }
@@ -332,9 +353,14 @@ const App = {
 
   // ── INIT ──
 
-  init() {
+  async init() {
     if (typeof Auth !== 'undefined' && !Auth.exigirLogin()) return;
-    this.data = Store.init();
+    try {
+      this.data = await Store.init();
+    } catch (err) {
+      console.warn('Erro ao carregar dados do servidor, usando cache local:', err);
+      this.data = Store.initLocal();
+    }
     
     // Iniciar sincronização com servidor (se disponível)
     if (typeof API !== 'undefined') {
