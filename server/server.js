@@ -4,11 +4,42 @@ const bodyParser = require('body-parser');
 const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const path = require('path');
+const fs = require('fs');
+
+const loadLocalEnv = () => {
+  const envPath = path.join(__dirname, '.env');
+  if (!fs.existsSync(envPath)) return;
+
+  const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+
+    const index = trimmed.indexOf('=');
+    const key = trimmed.slice(0, index).trim();
+    const value = trimmed.slice(index + 1).trim().replace(/^["']|["']$/g, '');
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+};
+
+loadLocalEnv();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DB_PATH = path.join(__dirname, 'controle_producao.db');
 const USE_POSTGRES = Boolean(process.env.DATABASE_URL);
+const DB_SCHEMA = process.env.DB_SCHEMA || 'controle_producao';
+
+const quoteIdentifier = (value) => {
+  if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
+    throw new Error('DB_SCHEMA invalido. Use apenas letras, numeros e underscore.');
+  }
+  return `"${value}"`;
+};
+
+const postgresTable = () => `${quoteIdentifier(DB_SCHEMA)}.app_data`;
 
 // Middlewares
 app.use(cors());
@@ -23,11 +54,14 @@ let db;
 let pool;
 const initDB = () => {
   if (USE_POSTGRES) {
+    const shouldUseSSL =
+      process.env.PGSSLMODE === 'require' ||
+      process.env.DATABASE_URL.includes('neon.tech') ||
+      process.env.NODE_ENV === 'production';
+
     pool = new Pool({
       connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production'
-        ? { rejectUnauthorized: false }
-        : false
+      ssl: shouldUseSSL ? { rejectUnauthorized: false } : false
     });
 
     return createTables().then(() => {
@@ -50,13 +84,18 @@ const initDB = () => {
 
 const createTables = () => {
   if (USE_POSTGRES) {
+    const schema = quoteIdentifier(DB_SCHEMA);
+    const table = postgresTable();
+
     return pool.query(`
-      CREATE TABLE IF NOT EXISTS app_data (
+      CREATE SCHEMA IF NOT EXISTS ${schema};
+
+      CREATE TABLE IF NOT EXISTS ${table} (
         id SERIAL PRIMARY KEY,
         data_key TEXT UNIQUE,
         data_value TEXT,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      )
+      );
     `);
   }
 
@@ -83,7 +122,7 @@ const saveData = (key, value) => {
   if (USE_POSTGRES) {
     const json = JSON.stringify(value);
     return pool.query(
-      `INSERT INTO app_data (data_key, data_value, updated_at)
+      `INSERT INTO ${postgresTable()} (data_key, data_value, updated_at)
        VALUES ($1, $2, CURRENT_TIMESTAMP)
        ON CONFLICT (data_key)
        DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
@@ -107,7 +146,7 @@ const saveData = (key, value) => {
 const loadData = (key) => {
   if (USE_POSTGRES) {
     return pool
-      .query(`SELECT data_value FROM app_data WHERE data_key = $1`, [key])
+      .query(`SELECT data_value FROM ${postgresTable()} WHERE data_key = $1`, [key])
       .then(result => {
         const value = result.rows[0]?.data_value;
         return value ? JSON.parse(value) : null;
@@ -194,7 +233,7 @@ const startServer = async () => {
       }
       console.log(`✓ Servidor rodando em http://${localIP}:${PORT}`);
       console.log(`✓ URL Local: http://localhost:${PORT}`);
-      console.log(`✓ Banco de dados: ${USE_POSTGRES ? 'PostgreSQL' : DB_PATH}`);
+      console.log(`✓ Banco de dados: ${USE_POSTGRES ? `PostgreSQL schema ${DB_SCHEMA}` : DB_PATH}`);
       console.log(`✓ API endpoints:`);
       console.log(`  GET  /api/data       - Carregar dados`);
       console.log(`  POST /api/data       - Salvar dados`);

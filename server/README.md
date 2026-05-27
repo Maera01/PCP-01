@@ -9,6 +9,25 @@ cd server
 npm install
 ```
 
+## Usar Neon com schema proprio
+
+Quando o mesmo banco Neon atende mais de um aplicativo, configure um schema exclusivo para este app. Assim a tabela `app_data` fica em `controle_producao.app_data`, separada de `public.app_data` e dos schemas de outros sistemas.
+
+1. Copie `server/.env.example` para `server/.env`.
+2. Preencha `DATABASE_URL` com a URL do Neon.
+3. Mantenha ou altere `DB_SCHEMA=controle_producao`.
+4. Inicie o servidor. Ele cria o schema e a tabela automaticamente.
+
+No Render ou outro servico de hospedagem, cadastre estas variaveis no painel:
+
+```bash
+DATABASE_URL=postgresql://...
+DB_SCHEMA=controle_producao
+PGSSLMODE=require
+```
+
+Se ja existem dados em `public.app_data`, rode o arquivo `server/neon-schema.sql` no SQL Editor do Neon para copiar os dados para o schema novo. Depois de conferir que o app carregou tudo corretamente, a tabela antiga `public.app_data` pode ser removida.
+
 ## Iniciar servidor
 
 ```bash
@@ -57,6 +76,7 @@ O frontend carrega automaticamente:
 
 - Arquivo: `controle_producao.db` (SQLite)
 - Localização: `server/` (mesmo diretório que server.js)
+- PostgreSQL/Neon: schema `controle_producao` por padrão, configurável por `DB_SCHEMA`
 - Tabela: `app_data` com colunas:
   - `id` (INT PRIMARY KEY)
   - `data_key` (TEXT UNIQUE) - chave dos dados
