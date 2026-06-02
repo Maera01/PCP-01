@@ -531,15 +531,28 @@ const App = {
 
   renderDashboard() {
     const {pedidos, expedicao} = this.data;
-    const concluidos = (expedicao || []).filter(e => e.statusConferencia === 'Aceito').length;
+    const pedidosLista = pedidos || [];
+    const expedicaoLista = expedicao || [];
+    const emAtraso = pedidosLista.filter(p => (parseInt(p.diasAtraso)||0) > 0);
+    const faltandoMp = pedidosLista.filter(p => String(p.statusSep || '').trim() === 'Faltando MP');
+    const separacaoParcial = pedidosLista.filter(p => String(p.statusSep || '').toLowerCase().includes('parcial'));
+    const prontosExpedicao = pedidosLista.filter(p => pedidoConcluido(p) && separacaoPermiteFinalizacao(p.statusSep));
+    const aguardandoConferencia = expedicaoLista.filter(e => (e.statusConferencia || statusConferenciaExpedicao(e)) === 'Pendente');
+    const conferidos = expedicaoLista.filter(e => ['Aceito', 'Recusado'].includes(e.statusConferencia || statusConferenciaExpedicao(e)));
+    const aceitos = expedicaoLista.filter(e => (e.statusConferencia || statusConferenciaExpedicao(e)) === 'Aceito');
+    const taxaAceite = conferidos.length ? Math.round((aceitos.length / conferidos.length) * 100) : 0;
 
-    document.getElementById('kpi-total').textContent      = pedidos.length;
-    document.getElementById('kpi-producao').textContent   = pedidos.filter(p => p.statusVencimento !== 'Produzido').length;
-    document.getElementById('kpi-concluidos').textContent = concluidos;
-    document.getElementById('kpi-atraso').textContent     = pedidos.filter(p => (parseInt(p.diasAtraso)||0) > 0).length;
+    document.getElementById('kpi-producao').textContent   = pedidosLista.length;
+    document.getElementById('kpi-atraso').textContent     = emAtraso.length;
+    document.getElementById('kpi-faltando').textContent   = faltandoMp.length;
+    document.getElementById('kpi-parcial').textContent    = separacaoParcial.length;
+    document.getElementById('kpi-prontos').textContent    = prontosExpedicao.length;
+    document.getElementById('kpi-expedicao').textContent  = aguardandoConferencia.length;
+    document.getElementById('kpi-prontos-sub').textContent = 'aguardando envio';
+    document.getElementById('kpi-expedicao-sub').textContent = `${taxaAceite}% aceitos`;
 
     const tbody = document.getElementById('tbody-recentes');
-    tbody.innerHTML = pedidos.slice(0,8).map(p => `
+    tbody.innerHTML = pedidosLista.slice(0,8).map(p => `
       <tr style="cursor:default">
         <td><strong>${escapar(p.produto)}</strong></td>
         <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
@@ -551,21 +564,45 @@ const App = {
         <div class="empty-state"><span class="empty-icon">◈</span>Nenhum pedido</div>
       </td></tr>`;
 
-    const contagem = {};
-    pedidos.forEach(p => { contagem[p.produto] = (contagem[p.produto]||0) + 1; });
-    const sorted = Object.entries(contagem).sort((a,b) => b[1]-a[1]).slice(0,10);
-    const max = sorted[0]?.[1] || 1;
+    const contar = (lista, keyFn) => lista.reduce((acc, item) => {
+      const key = keyFn(item) || '—';
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
+    const problemas = {};
+    pedidosLista.forEach(p => {
+      Object.values(p.etapas || {}).forEach(etapa => {
+        const problema = String(etapa?.problema || '').trim();
+        if (problema && !['Não', 'Nao', 'NaN'].includes(problema)) {
+          problemas[problema] = (problemas[problema] || 0) + 1;
+        }
+      });
+    });
+    const renderBars = (id, entries, emptyText = 'Sem dados') => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const data = entries.filter(([, qtd]) => qtd > 0).sort((a,b) => b[1] - a[1]).slice(0, 10);
+      if (!data.length) {
+        el.innerHTML = `<div class="empty-state">${emptyText}</div>`;
+        return;
+      }
+      const max = data[0]?.[1] || 1;
+      el.innerHTML = data.map(([nome, qtd]) => `
+        <div class="bar-row">
+          <span class="bar-label" title="${escapar(nome)}">
+            ${escapar(nome.length > 12 ? nome.slice(0,12)+'…' : nome)}
+          </span>
+          <div class="bar-track">
+            <div class="bar-fill" style="width:${Math.round(qtd/max*100)}%"></div>
+          </div>
+          <span class="bar-count">${qtd}</span>
+        </div>`).join('');
+    };
 
-    document.getElementById('chart-equip').innerHTML = sorted.map(([nome, qtd]) => `
-      <div class="bar-row">
-        <span class="bar-label" title="${escapar(nome)}">
-          ${escapar(nome.length > 9 ? nome.slice(0,9)+'…' : nome)}
-        </span>
-        <div class="bar-track">
-          <div class="bar-fill" style="width:${Math.round(qtd/max*100)}%"></div>
-        </div>
-        <span class="bar-count">${qtd}</span>
-      </div>`).join('');
+    renderBars('chart-equip', Object.entries(contar(pedidosLista, p => p.produto)), 'Sem pedidos');
+    renderBars('chart-etapas', Object.entries(contar(pedidosLista, p => etapaAtual(p))), 'Sem etapas');
+    renderBars('chart-almox', Object.entries(contar(pedidosLista, p => p.statusSep || 'Sem status')), 'Sem separações');
+    renderBars('chart-problemas', Object.entries(problemas), 'Sem problemas registrados');
   },
 
   // ── PEDIDOS ──

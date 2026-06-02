@@ -1,24 +1,34 @@
 <div class="page active" id="page-dashboard">
   <div class="kpi-grid">
     <div class="kpi-card">
-      <div class="kpi-label">Total Pedidos</div>
-      <div class="kpi-value" id="kpi-total">0</div>
-      <div class="kpi-sub">registrados</div>
-    </div>
-    <div class="kpi-card kpi-warning">
       <div class="kpi-label">Em Produção</div>
       <div class="kpi-value" id="kpi-producao">0</div>
-      <div class="kpi-sub">em andamento</div>
-    </div>
-    <div class="kpi-card kpi-success">
-      <div class="kpi-label">Concluídos</div>
-      <div class="kpi-value" id="kpi-concluidos">0</div>
-      <div class="kpi-sub">entregues</div>
+      <div class="kpi-sub">pedidos ativos</div>
     </div>
     <div class="kpi-card kpi-danger">
       <div class="kpi-label">Em Atraso</div>
       <div class="kpi-value" id="kpi-atraso">0</div>
       <div class="kpi-sub">pedidos</div>
+    </div>
+    <div class="kpi-card kpi-danger">
+      <div class="kpi-label">Faltando MP</div>
+      <div class="kpi-value" id="kpi-faltando">0</div>
+      <div class="kpi-sub">travados</div>
+    </div>
+    <div class="kpi-card kpi-warning">
+      <div class="kpi-label">Separação Parcial</div>
+      <div class="kpi-value" id="kpi-parcial">0</div>
+      <div class="kpi-sub">pedidos</div>
+    </div>
+    <div class="kpi-card kpi-success">
+      <div class="kpi-label">Prontos p/ Expedição</div>
+      <div class="kpi-value" id="kpi-prontos">0</div>
+      <div class="kpi-sub" id="kpi-prontos-sub">aguardando envio</div>
+    </div>
+    <div class="kpi-card kpi-warning">
+      <div class="kpi-label">Aguard. Conferência</div>
+      <div class="kpi-value" id="kpi-expedicao">0</div>
+      <div class="kpi-sub" id="kpi-expedicao-sub">0% aceitos</div>
     </div>
   </div>
 
@@ -26,17 +36,7 @@
     <div class="card">
       <div class="card-header">
         <h2>Pedidos Recentes</h2>
-        <!-- Badge indicando somente leitura -->
-        <span style="
-          font-family:var(--font-mono);
-          font-size:10px;
-          color:var(--text-muted);
-          background:var(--bg-4);
-          padding:3px 10px;
-          border-radius:20px;
-          border:1px solid var(--border);
-          letter-spacing:1px;
-        ">◉ VISUALIZAÇÃO</span>
+        <span class="count-badge">Visualização</span>
       </div>
       <div class="card-body">
         <table class="table">
@@ -60,6 +60,35 @@
       </div>
       <div class="card-body">
         <div class="bar-chart" id="chart-equip"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dashboard-grid dashboard-grid-three">
+    <div class="card">
+      <div class="card-header">
+        <h2>Por Etapa Atual</h2>
+      </div>
+      <div class="card-body">
+        <div class="bar-chart" id="chart-etapas"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Almoxarifado</h2>
+      </div>
+      <div class="card-body">
+        <div class="bar-chart" id="chart-almox"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Problemas</h2>
+      </div>
+      <div class="card-body">
+        <div class="bar-chart" id="chart-problemas"></div>
       </div>
     </div>
   </div>

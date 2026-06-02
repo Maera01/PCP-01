@@ -207,7 +207,7 @@ html, body {
 /* ── KPI GRID ── */
 .kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 16px;
 }
 
@@ -215,7 +215,7 @@ html, body {
   background: var(--bg-3);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 18px;
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -246,7 +246,7 @@ html, body {
 
 .kpi-value {
   font-family: var(--font-mono);
-  font-size: 42px;
+  font-size: 38px;
   font-weight: 600;
   color: var(--accent);
   line-height: 1;
@@ -266,7 +266,10 @@ html, body {
   display: grid;
   grid-template-columns: 2fr 1fr;
   gap: 16px;
-  flex: 1;
+}
+
+.dashboard-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 /* ── CARDS ── */
@@ -918,6 +921,12 @@ select option { background: var(--bg-2); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ── RESPONSIVE ── */
+@media (max-width: 1200px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .sidebar {
     transform: translateX(-100%);
