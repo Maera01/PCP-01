@@ -40,6 +40,7 @@ const quoteIdentifier = (value) => {
 };
 
 const postgresTable = () => `${quoteIdentifier(DB_SCHEMA)}.app_data`;
+const postgresPedidosTable = () => `${quoteIdentifier(DB_SCHEMA)}.pedidos`;
 
 // Middlewares
 app.use(cors());
@@ -86,6 +87,7 @@ const createTables = () => {
   if (USE_POSTGRES) {
     const schema = quoteIdentifier(DB_SCHEMA);
     const table = postgresTable();
+    const pedidosTable = postgresPedidosTable();
 
     return pool.query(`
       CREATE SCHEMA IF NOT EXISTS ${schema};
@@ -95,6 +97,14 @@ const createTables = () => {
         data_key TEXT UNIQUE,
         data_value TEXT,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ${pedidosTable} (
+        id TEXT PRIMARY KEY,
+        numero TEXT,
+        dados JSONB NOT NULL,
+        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
   }
@@ -118,16 +128,91 @@ const createTables = () => {
 };
 
 // ── HELPER: Salvar/Carregar dados JSON na tabela ──
+const numeroPedido = (pedido) => {
+  return String(
+    pedido?.numero ||
+    pedido?.numeroOP ||
+    pedido?.serie ||
+    pedido?.id ||
+    ''
+  ).trim();
+};
+
+const salvarPedidosPostgres = async (pedidos) => {
+  if (!Array.isArray(pedidos)) return;
+
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+
+    const ids = [];
+    for (const pedido of pedidos) {
+      if (!pedido?.id) continue;
+      ids.push(String(pedido.id));
+
+      await client.query(
+        `INSERT INTO ${postgresPedidosTable()} (id, numero, dados, criado_em, atualizado_em)
+         VALUES ($1, $2, $3::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+         ON CONFLICT (id)
+         DO UPDATE SET
+           numero = EXCLUDED.numero,
+           dados = EXCLUDED.dados,
+           atualizado_em = CURRENT_TIMESTAMP`,
+        [String(pedido.id), numeroPedido(pedido), JSON.stringify(pedido)]
+      );
+    }
+
+    if (ids.length) {
+      await client.query(
+        `DELETE FROM ${postgresPedidosTable()} WHERE NOT (id = ANY($1::text[]))`,
+        [ids]
+      );
+    } else {
+      await client.query(`DELETE FROM ${postgresPedidosTable()}`);
+    }
+
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+const carregarPedidosPostgres = async () => {
+  const result = await pool.query(
+    `SELECT dados FROM ${postgresPedidosTable()} ORDER BY criado_em DESC`
+  );
+  return result.rows.map(row => row.dados);
+};
+
+const migrarPedidosSeNecessario = async (data) => {
+  if (!data || !Array.isArray(data.pedidos) || data.pedidos.length === 0) return;
+
+  const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresPedidosTable()}`);
+  if (result.rows[0]?.total === 0) {
+    await salvarPedidosPostgres(data.pedidos);
+  }
+};
+
 const saveData = (key, value) => {
   if (USE_POSTGRES) {
-    const json = JSON.stringify(value);
+    const valueToStore = key === 'app_data' && value
+      ? { ...value, pedidos: [] }
+      : value;
+    const json = JSON.stringify(valueToStore);
     return pool.query(
       `INSERT INTO ${postgresTable()} (data_key, data_value, updated_at)
        VALUES ($1, $2, CURRENT_TIMESTAMP)
        ON CONFLICT (data_key)
        DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
       [key, json]
-    );
+    ).then(async () => {
+      if (key === 'app_data') {
+        await salvarPedidosPostgres(value?.pedidos || []);
+      }
+    });
   }
 
   return new Promise((resolve, reject) => {
@@ -147,9 +232,14 @@ const loadData = (key) => {
   if (USE_POSTGRES) {
     return pool
       .query(`SELECT data_value FROM ${postgresTable()} WHERE data_key = $1`, [key])
-      .then(result => {
+      .then(async result => {
         const value = result.rows[0]?.data_value;
-        return value ? JSON.parse(value) : null;
+        const data = value ? JSON.parse(value) : null;
+        if (key !== 'app_data' || !data) return data;
+
+        await migrarPedidosSeNecessario(data);
+        const pedidos = await carregarPedidosPostgres();
+        return { ...data, pedidos };
       });
   }
 
