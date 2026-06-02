@@ -570,12 +570,22 @@ const App = {
       return acc;
     }, {});
     const problemas = {};
+    const adicionarProblema = (problema) => {
+      problema = String(problema || '').trim();
+      if (problema && !['Não', 'Nao', 'NaN'].includes(problema)) {
+        problemas[problema] = (problemas[problema] || 0) + 1;
+      }
+    };
+
     pedidosLista.forEach(p => {
       Object.values(p.etapas || {}).forEach(etapa => {
-        const problema = String(etapa?.problema || '').trim();
-        if (problema && !['Não', 'Nao', 'NaN'].includes(problema)) {
-          problemas[problema] = (problemas[problema] || 0) + 1;
-        }
+        adicionarProblema(etapa?.problema);
+      });
+    });
+
+    expedicaoLista.forEach(e => {
+      this.problemasProducao(e).forEach(p => {
+        adicionarProblema(p.problema);
       });
     });
     const renderBars = (id, entries, emptyText = 'Sem dados') => {
