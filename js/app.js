@@ -471,7 +471,7 @@ const App = {
     document.querySelector(`[data-page="${pagina}"]`)?.classList.add('active');
 
     const titulos = {
-      dashboard:'Pedidos',
+      dashboard:'Dashboard',
       pedidos:'Pedidos',
       expedicao:'Expedição',
       concluidos:'Concluídos',
