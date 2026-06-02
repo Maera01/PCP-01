@@ -57,7 +57,7 @@ html, body {
   width: var(--sidebar-w);
   height: 100vh;
   background: #f24105;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid rgba(255, 255, 255, 0.28);
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -79,7 +79,7 @@ html, body {
   align-items: center;
   min-height: 88px;
   padding: 18px 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.26);
 }
 
 .maera-logo {
@@ -101,14 +101,14 @@ html, body {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 18px;
+  padding: 11px 18px;
   background: none;
   border: none;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.86);
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 600;
   text-align: left;
   width: 100%;
   border-left: 3px solid transparent;
@@ -120,22 +120,24 @@ html, body {
   font-size: 16px;
   width: 18px;
   flex-shrink: 0;
+  color: #fff;
+  opacity: 0.95;
 }
 
 .nav-item:hover {
-  color: var(--text);
-  background: var(--accent-dim);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .nav-item.active {
-  color: var(--accent);
-  border-left-color: var(--accent);
-  background: var(--accent-dim);
+  color: #fff;
+  border-left-color: #fff;
+  background: rgba(255, 255, 255, 0.18);
 }
 
 .sidebar-footer {
   padding: 14px 18px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(255, 255, 255, 0.26);
 }
 
 .data-info {
@@ -144,7 +146,25 @@ html, body {
   gap: 2px;
   font-family: var(--font-mono);
   font-size: 10px;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.sidebar .data-info span,
+.sidebar #total-registros,
+.sidebar #ultima-atualizacao {
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.sidebar button[onclick="Auth.logout()"] {
+  color: #fff !important;
+  border-color: rgba(255, 255, 255, 0.8) !important;
+  background: transparent !important;
+}
+
+.sidebar button[onclick="Auth.logout()"]:hover {
+  color: #f24105 !important;
+  background: #fff !important;
+  border-color: #fff !important;
 }
 
 /* ── TOPBAR ── */
