@@ -448,8 +448,6 @@ select option { background: var(--bg-2); }
 }
 .cor-laranja { background: #f24105; }
 .cor-azul    { background: #3b82f6; }
-.cor-preto   { background: #555; border: 1px solid #777; }
-.cor-branco  { background: #ccc; border: 1px solid #aaa; }
 
 /* ── BUTTONS ── */
 .btn {

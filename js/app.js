@@ -274,8 +274,6 @@ function corDot(cor) {
   const cls = {
     'Laranja':'cor-laranja',
     'Azul':   'cor-azul',
-    'Preto':  'cor-preto',
-    'Branco': 'cor-branco'
   }[cor] || '';
   return `<span class="cor-dot ${cls}" title="${cor}"></span>`;
 }
