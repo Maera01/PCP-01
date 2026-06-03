@@ -1,75 +1,83 @@
--- Schema unificado para o Neon - Controle de Producao
--- 1 schema: controle_producao
--- 6 tabelas: app_data, usuarios, pedidos, expedicao, concluidos, auditoria
+-- ─────────────────────────────────────────────────────────────
+-- Schema unificado: controle_producao
+-- 6 tabelas: dashboard, pedidos, expedicao, concluidos,
+--            auditoria, usuarios
+-- ─────────────────────────────────────────────────────────────
 
 CREATE SCHEMA IF NOT EXISTS controle_producao;
 
 -- ─────────────────────────────────────────────
--- Tabela: app_data
+-- 1. dashboard
+-- Armazena configuracoes e metricas gerais
 -- ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS controle_producao.app_data (
-  id          SERIAL PRIMARY KEY,
-  data_key    TEXT UNIQUE NOT NULL,
-  data_value  TEXT,
-  updated_at  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+CREATE TABLE IF NOT EXISTS controle_producao.dashboard (
+  id            SERIAL PRIMARY KEY,
+  data_key      TEXT UNIQUE NOT NULL,
+  data_value    TEXT,
+  updated_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ─────────────────────────────────────────────
--- Tabela: usuarios
--- ─────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS controle_producao.usuarios (
-  id             TEXT PRIMARY KEY,
-  nome           TEXT NOT NULL,
-  login          TEXT NOT NULL UNIQUE,
-  password_hash  TEXT NOT NULL,
-  perfil         TEXT NOT NULL DEFAULT 'expedicao',
-  permissoes     JSONB NOT NULL DEFAULT '{}'::jsonb,
-  criado_em      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-);
-
--- ─────────────────────────────────────────────
--- Tabela: pedidos
+-- 2. pedidos
+-- Ordens de producao
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS controle_producao.pedidos (
-  id             TEXT PRIMARY KEY,
-  numero         TEXT,
-  dados          JSONB NOT NULL,
-  criado_em      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  id            TEXT PRIMARY KEY,
+  numero        TEXT,
+  dados         JSONB NOT NULL,
+  criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ─────────────────────────────────────────────
--- Tabela: expedicao
+-- 3. expedicao
+-- Itens aguardando ou em processo de expedicao
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS controle_producao.expedicao (
-  id             TEXT PRIMARY KEY,
-  referencia     TEXT,
-  dados          JSONB NOT NULL,
-  criado_em      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  id            TEXT PRIMARY KEY,
+  referencia    TEXT,
+  dados         JSONB NOT NULL,
+  criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ─────────────────────────────────────────────
--- Tabela: concluidos
+-- 4. concluidos
+-- Itens finalizados / aceitos
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS controle_producao.concluidos (
-  id             TEXT PRIMARY KEY,
-  referencia     TEXT,
-  dados          JSONB NOT NULL,
-  criado_em      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  id            TEXT PRIMARY KEY,
+  referencia    TEXT,
+  dados         JSONB NOT NULL,
+  criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 -- ─────────────────────────────────────────────
--- Tabela: auditoria
+-- 5. auditoria
+-- Logs de acoes do sistema
 -- ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS controle_producao.auditoria (
-  id             TEXT PRIMARY KEY,
-  acao           TEXT,
-  dados          JSONB NOT NULL,
-  criado_em      TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-  atualizado_em  TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+  id            TEXT PRIMARY KEY,
+  acao          TEXT,
+  dados         JSONB NOT NULL,
+  criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ─────────────────────────────────────────────
+-- 6. usuarios
+-- Usuarios e permissoes de acesso
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS controle_producao.usuarios (
+  id            TEXT PRIMARY KEY,
+  nome          TEXT NOT NULL,
+  login         TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
+  perfil        TEXT NOT NULL DEFAULT 'expedicao',
+  permissoes    JSONB NOT NULL DEFAULT '{}'::jsonb,
+  criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -77,11 +85,11 @@ CREATE TABLE IF NOT EXISTS controle_producao.auditoria (
 -- MIGRACOES DE DADOS ANTIGOS
 -- ═════════════════════════════════════════════
 
--- Migracao: public.app_data -> controle_producao.app_data
+-- public.app_data -> controle_producao.dashboard
 DO $$
 BEGIN
   IF to_regclass('public.app_data') IS NOT NULL THEN
-    INSERT INTO controle_producao.app_data (data_key, data_value, updated_at)
+    INSERT INTO controle_producao.dashboard (data_key, data_value, updated_at)
     SELECT data_key, data_value, updated_at
     FROM public.app_data
     ON CONFLICT (data_key) DO UPDATE SET
@@ -90,7 +98,7 @@ BEGIN
   END IF;
 END $$;
 
--- Migracao: schemas antigos separados -> controle_producao.pedidos
+-- controle_producao_pedidos.registros -> controle_producao.pedidos
 DO $$
 BEGIN
   IF to_regclass('controle_producao_pedidos.registros') IS NOT NULL THEN
@@ -104,7 +112,7 @@ BEGIN
   END IF;
 END $$;
 
--- Migracao: schemas antigos separados -> controle_producao.expedicao
+-- controle_producao_expedicao.registros -> controle_producao.expedicao
 DO $$
 BEGIN
   IF to_regclass('controle_producao_expedicao.registros') IS NOT NULL THEN
@@ -118,7 +126,7 @@ BEGIN
   END IF;
 END $$;
 
--- Migracao: schemas antigos separados -> controle_producao.concluidos
+-- controle_producao_concluidos.registros -> controle_producao.concluidos
 DO $$
 BEGIN
   IF to_regclass('controle_producao_concluidos.registros') IS NOT NULL THEN
@@ -132,7 +140,7 @@ BEGIN
   END IF;
 END $$;
 
--- Migracao: schemas antigos separados -> controle_producao.auditoria
+-- controle_producao_auditoria.registros -> controle_producao.auditoria
 DO $$
 BEGIN
   IF to_regclass('controle_producao_auditoria.registros') IS NOT NULL THEN
@@ -146,13 +154,14 @@ BEGIN
   END IF;
 END $$;
 
--- Migracao: dados ainda dentro de controle_producao.app_data (formato JSON legado)
+-- Migracao do JSON legado dentro de controle_producao.app_data ou dashboard
 DO $$
 DECLARE
   app_json JSONB;
 BEGIN
+  -- Tenta ler do dashboard primeiro, depois do app_data legado
   SELECT data_value::jsonb INTO app_json
-  FROM controle_producao.app_data
+  FROM controle_producao.dashboard
   WHERE data_key = 'app_data';
 
   IF app_json IS NULL THEN
@@ -172,7 +181,7 @@ BEGIN
     dados         = EXCLUDED.dados,
     atualizado_em = CURRENT_TIMESTAMP;
 
-  -- Expedicao (status diferente de Aceito)
+  -- Expedicao (nao concluidos)
   INSERT INTO controle_producao.expedicao (id, referencia, dados)
   SELECT
     item.dados->>'id',
@@ -186,7 +195,7 @@ BEGIN
     dados         = EXCLUDED.dados,
     atualizado_em = CURRENT_TIMESTAMP;
 
-  -- Concluidos (status = Aceito)
+  -- Concluidos (statusConferencia = Aceito)
   INSERT INTO controle_producao.concluidos (id, referencia, dados)
   SELECT
     item.dados->>'id',
@@ -215,5 +224,5 @@ BEGIN
 
 END $$;
 
--- Os usuarios iniciais sao criados automaticamente pelo servidor com senha em
--- hash PBKDF2 + salt. Nao grave senhas em texto puro pelo SQL Editor.
+-- Os usuarios iniciais sao criados automaticamente pelo servidor com senha
+-- em hash PBKDF2 + salt. Nao grave senhas em texto puro pelo SQL Editor.
