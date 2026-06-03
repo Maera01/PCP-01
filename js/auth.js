@@ -6,14 +6,6 @@
 
 const USUARIOS_KEY = 'cp_usuarios';
 
-const DEFAULT_USUARIOS = [
-  { id:'u001', nome:'Admin Geral',    login:'admin',        senha:'admin123',  perfil:'admin'        },
-  { id:'u002', nome:'Comercial',      login:'comercial',    senha:'com123',    perfil:'comercial'    },
-  { id:'u003', nome:'Almoxarifado',   login:'almoxarifado', senha:'alm123',    perfil:'almoxarifado' },
-  { id:'u004', nome:'Produção',       login:'producao',     senha:'prod123',   perfil:'producao'     },
-  { id:'u005', nome:'Expedição',      login:'expedicao',    senha:'exp123',    perfil:'expedicao'    }
-];
-
 const PERMISSOES = {
   admin: {
     paginas:            ['dashboard','pedidos','expedicao','concluidos','auditoria','usuarios'],
@@ -69,13 +61,6 @@ const PERMISSOES = {
 
 function novoIdUsuario() {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
-}
-
-function defaultUsuarios() {
-  return DEFAULT_USUARIOS.map(u => ({
-    ...u,
-    permissoes: PERMISSOES[u.perfil] || {}
-  }));
 }
 
 function loadUsuarios() {

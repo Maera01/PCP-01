@@ -105,14 +105,6 @@ const PERMISSOES = {
   }
 };
 
-const DEFAULT_USUARIOS = [
-  { id: 'u001', nome: 'Admin Geral',    login: 'admin',        senha: 'admin123',  perfil: 'admin' },
-  { id: 'u002', nome: 'Comercial',      login: 'comercial',    senha: 'com123',    perfil: 'comercial' },
-  { id: 'u003', nome: 'Almoxarifado',   login: 'almoxarifado', senha: 'alm123',    perfil: 'almoxarifado' },
-  { id: 'u004', nome: 'Producao',       login: 'producao',     senha: 'prod123',   perfil: 'producao' },
-  { id: 'u005', nome: 'Expedicao',      login: 'expedicao',    senha: 'exp123',    perfil: 'expedicao' }
-];
-
 const novoIdUsuario = () => 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
 const hashSenha = (senha) => {
@@ -244,8 +236,8 @@ const createTables = () => {
         criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
-    `).then(async () => {
-      await seedUsuarios();
+    `).then(() => {
+      console.log('✓ Tabelas criadas');
     });
   }
 
@@ -274,31 +266,9 @@ const createTables = () => {
           )
         `, (userErr) => {
           if (userErr) reject(userErr);
-          else seedUsuarios().then(resolve).catch(reject);
+          else resolve();
         });
       });
-    });
-  });
-};
-
-// ── USUARIOS ──
-const seedUsuarios = async () => {
-  const count = await contarUsuarios();
-  if (count > 0) return;
-  for (const usuario of DEFAULT_USUARIOS) {
-    await inserirUsuario({ ...usuario, permissoes: PERMISSOES[usuario.perfil] || {} });
-  }
-};
-
-const contarUsuarios = async () => {
-  if (USE_POSTGRES) {
-    const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresUsuariosTable()}`);
-    return result.rows[0]?.total || 0;
-  }
-  return new Promise((resolve, reject) => {
-    db.get('SELECT COUNT(*) AS total FROM usuarios', (err, row) => {
-      if (err) reject(err);
-      else resolve(row?.total || 0);
     });
   });
 };
@@ -512,8 +482,6 @@ const salvarAreasPostgres = async (data) => {
 // ── SALVAR/CARREGAR DADOS (dashboard + áreas) ──
 const saveData = (key, value) => {
   if (USE_POSTGRES) {
-    // Kits, pedidos, expedicao e logs ficam em suas proprias tabelas;
-    // o dashboard armazena apenas metadados (kits, produtos, criadoEm, etc.)
     const valueToStore = key === 'app_data' && value
       ? { ...value, pedidos: [], expedicao: [], logs: [], kits: [] }
       : value;
