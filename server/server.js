@@ -5,6 +5,7 @@ const sqlite3 = require('sqlite3').verbose();
 const { Pool } = require('pg');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 
 const loadLocalEnv = () => {
   const envPath = path.join(__dirname, '.env');
@@ -41,6 +42,96 @@ const quoteIdentifier = (value) => {
 
 const postgresTable = () => `${quoteIdentifier(DB_SCHEMA)}.app_data`;
 const postgresPedidosTable = () => `${quoteIdentifier(DB_SCHEMA)}.pedidos`;
+const postgresUsuariosTable = () => `${quoteIdentifier(DB_SCHEMA)}.usuarios`;
+
+const PERMISSOES = {
+  admin: {
+    paginas: ['dashboard', 'pedidos', 'expedicao', 'concluidos', 'auditoria', 'usuarios'],
+    criarPedido: true,
+    editarComercial: true,
+    editarAlmoxarifado: true,
+    editarProducao: true,
+    editarExpedicao: true,
+    excluir: true,
+    exportar: true
+  },
+  comercial: {
+    paginas: ['dashboard', 'pedidos', 'concluidos'],
+    criarPedido: true,
+    editarComercial: true,
+    editarAlmoxarifado: false,
+    editarProducao: false,
+    editarExpedicao: false,
+    excluir: false,
+    exportar: false
+  },
+  almoxarifado: {
+    paginas: ['dashboard', 'pedidos', 'concluidos'],
+    criarPedido: false,
+    editarComercial: false,
+    editarAlmoxarifado: true,
+    editarProducao: false,
+    editarExpedicao: false,
+    excluir: false,
+    exportar: false
+  },
+  producao: {
+    paginas: ['dashboard', 'pedidos', 'concluidos'],
+    criarPedido: false,
+    editarComercial: false,
+    editarAlmoxarifado: false,
+    editarProducao: true,
+    editarExpedicao: false,
+    excluir: false,
+    exportar: false
+  },
+  expedicao: {
+    paginas: ['dashboard', 'expedicao', 'concluidos'],
+    criarPedido: false,
+    editarComercial: false,
+    editarAlmoxarifado: false,
+    editarProducao: false,
+    editarExpedicao: true,
+    excluir: false,
+    exportar: false
+  }
+};
+
+const DEFAULT_USUARIOS = [
+  { id: 'u001', nome: 'Admin Geral', login: 'admin', senha: 'admin123', perfil: 'admin' },
+  { id: 'u002', nome: 'Comercial', login: 'comercial', senha: 'com123', perfil: 'comercial' },
+  { id: 'u003', nome: 'Almoxarifado', login: 'almoxarifado', senha: 'alm123', perfil: 'almoxarifado' },
+  { id: 'u004', nome: 'Producao', login: 'producao', senha: 'prod123', perfil: 'producao' },
+  { id: 'u005', nome: 'Expedicao', login: 'expedicao', senha: 'exp123', perfil: 'expedicao' }
+];
+
+const novoIdUsuario = () => 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+const hashSenha = (senha) => {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const iterations = 120000;
+  const hash = crypto.pbkdf2Sync(String(senha), salt, iterations, 32, 'sha256').toString('hex');
+  return `pbkdf2_sha256$${iterations}$${salt}$${hash}`;
+};
+
+const validarSenha = (senha, passwordHash) => {
+  if (!passwordHash) return false;
+  const [algo, iterationsRaw, salt, expected] = String(passwordHash).split('$');
+  if (algo !== 'pbkdf2_sha256' || !iterationsRaw || !salt || !expected) return false;
+  const hash = crypto.pbkdf2Sync(String(senha), salt, Number(iterationsRaw), 32, 'sha256');
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  return expectedBuffer.length === hash.length && crypto.timingSafeEqual(hash, expectedBuffer);
+};
+
+const sanitizeUsuario = (usuario) => ({
+  id: usuario.id,
+  nome: usuario.nome,
+  login: usuario.login,
+  perfil: usuario.perfil,
+  permissoes: typeof usuario.permissoes === 'string'
+    ? JSON.parse(usuario.permissoes || '{}')
+    : (usuario.permissoes || {})
+});
 
 // Middlewares
 app.use(cors());
@@ -88,6 +179,7 @@ const createTables = () => {
     const schema = quoteIdentifier(DB_SCHEMA);
     const table = postgresTable();
     const pedidosTable = postgresPedidosTable();
+    const usuariosTable = postgresUsuariosTable();
 
     return pool.query(`
       CREATE SCHEMA IF NOT EXISTS ${schema};
@@ -106,7 +198,18 @@ const createTables = () => {
         criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
-    `);
+      
+      CREATE TABLE IF NOT EXISTS ${usuariosTable} (
+        id TEXT PRIMARY KEY,
+        nome TEXT NOT NULL,
+        login TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        perfil TEXT NOT NULL DEFAULT 'expedicao',
+        permissoes JSONB NOT NULL DEFAULT '{}'::jsonb,
+        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `).then(seedUsuarios);
   }
 
   return new Promise((resolve, reject) => {
@@ -121,8 +224,174 @@ const createTables = () => {
         )
       `, (err) => {
         if (err) reject(err);
-        else resolve();
+        else {
+          db.run(`
+            CREATE TABLE IF NOT EXISTS usuarios (
+              id TEXT PRIMARY KEY,
+              nome TEXT NOT NULL,
+              login TEXT NOT NULL UNIQUE,
+              password_hash TEXT NOT NULL,
+              perfil TEXT NOT NULL DEFAULT 'expedicao',
+              permissoes TEXT NOT NULL DEFAULT '{}',
+              criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+              atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+          `, (userErr) => {
+            if (userErr) reject(userErr);
+            else seedUsuarios().then(resolve).catch(reject);
+          });
+        }
       });
+    });
+  });
+};
+
+const seedUsuarios = async () => {
+  const count = await contarUsuarios();
+  if (count > 0) return;
+
+  for (const usuario of DEFAULT_USUARIOS) {
+    await inserirUsuario({
+      ...usuario,
+      permissoes: PERMISSOES[usuario.perfil] || {}
+    });
+  }
+};
+
+const contarUsuarios = async () => {
+  if (USE_POSTGRES) {
+    const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresUsuariosTable()}`);
+    return result.rows[0]?.total || 0;
+  }
+
+  return new Promise((resolve, reject) => {
+    db.get('SELECT COUNT(*) AS total FROM usuarios', (err, row) => {
+      if (err) reject(err);
+      else resolve(row?.total || 0);
+    });
+  });
+};
+
+const listarUsuarios = async () => {
+  if (USE_POSTGRES) {
+    const result = await pool.query(
+      `SELECT id, nome, login, perfil, permissoes FROM ${postgresUsuariosTable()} ORDER BY nome`
+    );
+    return result.rows.map(sanitizeUsuario);
+  }
+
+  return new Promise((resolve, reject) => {
+    db.all('SELECT id, nome, login, perfil, permissoes FROM usuarios ORDER BY nome', (err, rows) => {
+      if (err) reject(err);
+      else resolve(rows.map(sanitizeUsuario));
+    });
+  });
+};
+
+const buscarUsuarioPorLogin = async (login) => {
+  if (USE_POSTGRES) {
+    const result = await pool.query(
+      `SELECT * FROM ${postgresUsuariosTable()} WHERE login = $1`,
+      [String(login).trim()]
+    );
+    return result.rows[0] || null;
+  }
+
+  return new Promise((resolve, reject) => {
+    db.get('SELECT * FROM usuarios WHERE login = ?', [String(login).trim()], (err, row) => {
+      if (err) reject(err);
+      else resolve(row || null);
+    });
+  });
+};
+
+const inserirUsuario = async ({ id, nome, login, senha, perfil, permissoes }) => {
+  const usuario = {
+    id: id || novoIdUsuario(),
+    nome: String(nome || '').trim(),
+    login: String(login || '').trim(),
+    perfil: perfil || 'expedicao',
+    permissoes: permissoes || PERMISSOES[perfil] || {}
+  };
+  const passwordHash = hashSenha(senha);
+
+  if (USE_POSTGRES) {
+    const result = await pool.query(
+      `INSERT INTO ${postgresUsuariosTable()} (id, nome, login, password_hash, perfil, permissoes, criado_em, atualizado_em)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+       RETURNING id, nome, login, perfil, permissoes`,
+      [usuario.id, usuario.nome, usuario.login, passwordHash, usuario.perfil, JSON.stringify(usuario.permissoes)]
+    );
+    return sanitizeUsuario(result.rows[0]);
+  }
+
+  return new Promise((resolve, reject) => {
+    db.run(
+      `INSERT INTO usuarios (id, nome, login, password_hash, perfil, permissoes, criado_em, atualizado_em)
+       VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`,
+      [usuario.id, usuario.nome, usuario.login, passwordHash, usuario.perfil, JSON.stringify(usuario.permissoes)],
+      (err) => err ? reject(err) : resolve(sanitizeUsuario(usuario))
+    );
+  });
+};
+
+const atualizarUsuario = async (id, patch) => {
+  const nome = String(patch.nome || '').trim();
+  const login = String(patch.login || '').trim();
+  const perfil = patch.perfil || 'expedicao';
+  const permissoes = patch.permissoes || PERMISSOES[perfil] || {};
+  const senha = String(patch.senha || '');
+
+  if (USE_POSTGRES) {
+    const params = [id, nome, login, perfil, JSON.stringify(permissoes)];
+    let senhaSql = '';
+    if (senha) {
+      params.push(hashSenha(senha));
+      senhaSql = `, password_hash = $${params.length}`;
+    }
+    const result = await pool.query(
+      `UPDATE ${postgresUsuariosTable()}
+       SET nome = $2, login = $3, perfil = $4, permissoes = $5::jsonb, atualizado_em = CURRENT_TIMESTAMP${senhaSql}
+       WHERE id = $1
+       RETURNING id, nome, login, perfil, permissoes`,
+      params
+    );
+    return result.rows[0] ? sanitizeUsuario(result.rows[0]) : null;
+  }
+
+  return new Promise((resolve, reject) => {
+    const params = [nome, login, perfil, JSON.stringify(permissoes)];
+    let senhaSql = '';
+    if (senha) {
+      params.push(hashSenha(senha));
+      senhaSql = ', password_hash = ?';
+    }
+    params.push(id);
+    db.run(
+      `UPDATE usuarios SET nome = ?, login = ?, perfil = ?, permissoes = ?, atualizado_em = CURRENT_TIMESTAMP${senhaSql} WHERE id = ?`,
+      params,
+      function onUpdate(err) {
+        if (err) return reject(err);
+        if (this.changes === 0) return resolve(null);
+        db.get('SELECT id, nome, login, perfil, permissoes FROM usuarios WHERE id = ?', [id], (getErr, row) => {
+          if (getErr) reject(getErr);
+          else resolve(row ? sanitizeUsuario(row) : null);
+        });
+      }
+    );
+  });
+};
+
+const removerUsuario = async (id) => {
+  if (USE_POSTGRES) {
+    const result = await pool.query(`DELETE FROM ${postgresUsuariosTable()} WHERE id = $1`, [id]);
+    return result.rowCount > 0;
+  }
+
+  return new Promise((resolve, reject) => {
+    db.run('DELETE FROM usuarios WHERE id = ?', [id], function onDelete(err) {
+      if (err) reject(err);
+      else resolve(this.changes > 0);
     });
   });
 };
@@ -290,6 +559,80 @@ app.post('/api/data', async (req, res) => {
 // GET /api/health - Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { login, senha } = req.body || {};
+    const usuario = await buscarUsuarioPorLogin(login);
+    if (!usuario || !validarSenha(senha, usuario.password_hash)) {
+      return res.status(401).json({ success: false, error: 'Usuario ou senha invalidos' });
+    }
+    res.json({ success: true, user: sanitizeUsuario(usuario) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/auth/validate', async (req, res) => {
+  try {
+    const { login, senha } = req.body || {};
+    const usuario = await buscarUsuarioPorLogin(login);
+    if (!usuario || !validarSenha(senha, usuario.password_hash)) {
+      return res.status(401).json({ success: false, error: 'Credenciais invalidas' });
+    }
+    res.json({ success: true, user: sanitizeUsuario(usuario) });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await listarUsuarios();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  try {
+    const { nome, login, senha, perfil, permissoes } = req.body || {};
+    if (!nome || !login || !senha) {
+      return res.status(400).json({ success: false, error: 'nome, login e senha sao obrigatorios' });
+    }
+    const user = await inserirUsuario({ nome, login, senha, perfil, permissoes });
+    res.status(201).json({ success: true, user });
+  } catch (err) {
+    const status = err.code === '23505' || String(err.message).includes('UNIQUE') ? 409 : 500;
+    res.status(status).json({ success: false, error: err.message });
+  }
+});
+
+app.put('/api/users/:id', async (req, res) => {
+  try {
+    const { nome, login, perfil, permissoes, senha } = req.body || {};
+    if (!nome || !login) {
+      return res.status(400).json({ success: false, error: 'nome e login sao obrigatorios' });
+    }
+    const user = await atualizarUsuario(req.params.id, { nome, login, perfil, permissoes, senha });
+    if (!user) return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
+    res.json({ success: true, user });
+  } catch (err) {
+    const status = err.code === '23505' || String(err.message).includes('UNIQUE') ? 409 : 500;
+    res.status(status).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/users/:id', async (req, res) => {
+  try {
+    const removed = await removerUsuario(req.params.id);
+    if (!removed) return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 // POST /api/backup - Fazer backup (salva com timestamp)

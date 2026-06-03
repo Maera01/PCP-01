@@ -88,6 +88,26 @@ function loadUsuarios() {
   return usuarios;
 }
 
+async function requestAuth(path, options = {}) {
+  const baseUrl = typeof API !== 'undefined'
+    ? API.BASE_URL
+    : (() => {
+        const host = window.location.hostname;
+        if (host === 'localhost' || host === '127.0.0.1') return 'http://localhost:3000/api';
+        return 'https://pcp-le06.onrender.com/api';
+      })();
+
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers || {}) }
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.success === false) {
+    throw new Error(json.error || 'Erro ao comunicar com o servidor');
+  }
+  return json;
+}
+
 function saveUsuarios(usuarios) {
   try {
     localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
@@ -105,10 +125,19 @@ function findUsuarioById(id) {
 
 const Auth = {
   _key: 'cp_sessao',
+  _usuariosCache: null,
 
-  login(loginVal, senhaVal) {
-    const user = findUsuarioByLogin(loginVal);
-    if (!user || user.senha !== senhaVal) return false;
+  async login(loginVal, senhaVal) {
+    let user = null;
+    try {
+      const json = await requestAuth('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ login: loginVal, senha: senhaVal })
+      });
+      user = json.user;
+    } catch (err) {
+      return false;
+    }
     localStorage.setItem(this._key, JSON.stringify({
       id:        user.id,
       nome:      user.nome,
@@ -144,58 +173,72 @@ const Auth = {
   },
 
   getUsuarios() {
-    return loadUsuarios();
+    return this._usuariosCache || loadUsuarios();
   },
 
   getUsuario(id) {
-    return findUsuarioById(id);
+    return (this._usuariosCache || loadUsuarios()).find(u => u.id === id);
   },
 
-  validarCredenciais(loginVal, senhaVal) {
-    const user = findUsuarioByLogin(loginVal);
-    if (!user || user.senha !== senhaVal) return null;
-    return user;
+  async carregarUsuarios() {
+    try {
+      const json = await requestAuth('/users');
+      this._usuariosCache = json.users || [];
+      saveUsuarios(this._usuariosCache);
+      return this._usuariosCache;
+    } catch (err) {
+      this._usuariosCache = loadUsuarios();
+      return this._usuariosCache;
+    }
   },
 
-  criarUsuario(data) {
-    const usuarios = loadUsuarios();
+  async validarCredenciais(loginVal, senhaVal) {
+    try {
+      const json = await requestAuth('/auth/validate', {
+        method: 'POST',
+        body: JSON.stringify({ login: loginVal, senha: senhaVal })
+      });
+      return json.user || null;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  async criarUsuario(data) {
     if (!data.login || !data.senha || !data.nome) return null;
-    if (findUsuarioByLogin(data.login)) return null;
-    const novo = {
-      id: novoIdUsuario(),
-      nome: data.nome.trim(),
-      login: data.login.trim(),
-      senha: data.senha,
-      perfil: data.perfil || 'expedicao',
-      permissoes: data.permissoes || PERMISSOES[data.perfil] || {}
-    };
-    usuarios.push(novo);
-    saveUsuarios(usuarios);
-    return novo;
+    try {
+      const json = await requestAuth('/users', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      });
+      await this.carregarUsuarios();
+      return json.user || null;
+    } catch (err) {
+      return null;
+    }
   },
 
-  atualizarUsuario(id, patch) {
-    const usuarios = loadUsuarios();
-    const idx = usuarios.findIndex(u => u.id === id);
-    if (idx < 0) return null;
-    const usuario = usuarios[idx];
-    usuarios[idx] = {
-      ...usuario,
-      ...patch,
-      nome: patch.nome ? patch.nome.trim() : usuario.nome,
-      login: patch.login ? patch.login.trim() : usuario.login,
-      permissoes: patch.permissoes ? patch.permissoes : usuario.permissoes
-    };
-    saveUsuarios(usuarios);
-    return usuarios[idx];
+  async atualizarUsuario(id, patch) {
+    try {
+      const json = await requestAuth(`/users/${encodeURIComponent(id)}`, {
+        method: 'PUT',
+        body: JSON.stringify(patch)
+      });
+      await this.carregarUsuarios();
+      return json.user || null;
+    } catch (err) {
+      return null;
+    }
   },
 
-  removerUsuario(id) {
-    const usuarios = loadUsuarios();
-    const filtrados = usuarios.filter(u => u.id !== id);
-    if (filtrados.length === usuarios.length) return false;
-    saveUsuarios(filtrados);
-    return true;
+  async removerUsuario(id) {
+    try {
+      await requestAuth(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      await this.carregarUsuarios();
+      return true;
+    } catch (err) {
+      return false;
+    }
   },
 
   pode(acao) {

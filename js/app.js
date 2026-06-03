@@ -363,6 +363,9 @@ const App = {
 
   async init() {
     if (typeof Auth !== 'undefined' && !Auth.exigirLogin()) return;
+    if (typeof Auth !== 'undefined') {
+      await Auth.carregarUsuarios();
+    }
     try {
       this.data = await Store.init();
     } catch (err) {
@@ -457,7 +460,7 @@ const App = {
       case 'expedicao': this.renderExpedicao(); break;
       case 'concluidos': this.renderConcluidos(); break;
       case 'auditoria': this.renderAuditoria(); break;
-      case 'usuarios':  this.renderUsuarios();  break;
+      case 'usuarios':  await this.renderUsuarios();  break;
     }
       this._atualizarFooter();
     } catch(err) {
@@ -1338,8 +1341,8 @@ const App = {
         </tr>`).join('');
   },
 
-  renderUsuarios() {
-    const lista = typeof Auth === 'undefined' ? [] : Auth.getUsuarios();
+  async renderUsuarios() {
+    const lista = typeof Auth === 'undefined' ? [] : await Auth.carregarUsuarios();
     const tbody = document.getElementById('tbody-usuarios');
     if (!tbody) return;
     document.getElementById('usuarios-empty').style.display = lista.length === 0 ? 'block' : 'none';
@@ -1366,6 +1369,8 @@ const App = {
     document.getElementById('user-nome').value = '';
     document.getElementById('user-login').value = '';
     document.getElementById('user-senha').value = '';
+    document.getElementById('user-senha').required = true;
+    document.getElementById('user-senha').placeholder = '';
     document.getElementById('user-perfil').value = 'expedicao';
     ['dashboard','pedidos','expedicao','concluidos','auditoria','usuarios'].forEach(page => {
       document.getElementById(`user-pg-${page}`).checked = false;
@@ -1383,7 +1388,9 @@ const App = {
     document.getElementById('user-id').value = usuario.id;
     document.getElementById('user-nome').value = usuario.nome;
     document.getElementById('user-login').value = usuario.login;
-    document.getElementById('user-senha').value = usuario.senha;
+    document.getElementById('user-senha').value = '';
+    document.getElementById('user-senha').required = false;
+    document.getElementById('user-senha').placeholder = 'Deixe em branco para manter';
     document.getElementById('user-perfil').value = usuario.perfil || 'expedicao';
     ['dashboard','pedidos','expedicao','concluidos','auditoria','usuarios'].forEach(page => {
       document.getElementById(`user-pg-${page}`).checked = (usuario.permissoes?.paginas||[]).includes(page);
@@ -1394,14 +1401,14 @@ const App = {
     this.openModal('usuario');
   },
 
-  salvarUsuario(ev) {
+  async salvarUsuario(ev) {
     ev.preventDefault();
     const id = document.getElementById('user-id').value || null;
     const nome = document.getElementById('user-nome').value.trim();
     const login = document.getElementById('user-login').value.trim();
     const senha = document.getElementById('user-senha').value;
     const perfil = document.getElementById('user-perfil').value;
-    if (!nome || !login || !senha) {
+    if (!nome || !login || (!id && !senha)) {
       this.toast('Preencha nome, login e senha.', 'error');
       return;
     }
@@ -1418,10 +1425,16 @@ const App = {
       excluir:          false
     };
     if (id) {
-      Auth.atualizarUsuario(id, { nome, login, senha, perfil, permissoes });
+      const patch = { nome, login, perfil, permissoes };
+      if (senha) patch.senha = senha;
+      const atualizado = await Auth.atualizarUsuario(id, patch);
+      if (!atualizado) {
+        this.toast('NÃ£o foi possÃ­vel salvar no servidor.', 'error');
+        return;
+      }
       this.toast('Usuário atualizado.', 'success');
     } else {
-      const novo = Auth.criarUsuario({ nome, login, senha, perfil, permissoes });
+      const novo = await Auth.criarUsuario({ nome, login, senha, perfil, permissoes });
       if (!novo) {
         this.toast('Não foi possível criar usuário. Login duplicado?', 'error');
         return;
@@ -1432,9 +1445,9 @@ const App = {
     this.navigate('usuarios', { force: true });
   },
 
-  excluirUsuario(id) {
+  async excluirUsuario(id) {
     if (!confirm('Deseja excluir este usuário?')) return;
-    if (!Auth.removerUsuario(id)) {
+    if (!await Auth.removerUsuario(id)) {
       this.toast('Usuário não encontrado.', 'error');
       return;
     }
@@ -1813,12 +1826,12 @@ const App = {
     this.openModal('conferir-expedicao');
   },
 
-  _promptMasterAuthorization() {
+  async _promptMasterAuthorization() {
     const login = prompt('Usuário master para autorizar aprovação com item faltando (login):');
     if (!login) return null;
     const senha = prompt('Senha do usuário master:');
     if (!senha) return null;
-    const usuario = Auth.validarCredenciais(login, senha);
+    const usuario = await Auth.validarCredenciais(login, senha);
     if (!usuario || usuario.perfil !== 'admin') {
       this.toast('Credenciais master inválidas.', 'error');
       return null;
@@ -1826,13 +1839,13 @@ const App = {
     return usuario;
   },
 
-  _promptExpedicaoDoubleCheck() {
+  async _promptExpedicaoDoubleCheck() {
     if (!confirm('Tem certeza que deseja autorizar este equipamento?')) return null;
     const login = prompt('Login do usuário de expedição ou admin:');
     if (!login) return null;
     const senha = prompt('Senha do usuário de expedição ou admin:');
     if (!senha) return null;
-    const usuario = Auth.validarCredenciais(login, senha);
+    const usuario = await Auth.validarCredenciais(login, senha);
     if (!usuario || !['expedicao', 'admin'].includes(usuario.perfil)) {
       this.toast('Credenciais de expedição/admin inválidas.', 'error');
       return null;
@@ -1886,7 +1899,7 @@ const App = {
       <div style="margin-top:14px">${etapas}</div>`;
   },
 
-  salvarConferenciaExpedicao(ev) {
+  async salvarConferenciaExpedicao(ev) {
     ev.preventDefault();
     if (this._conferirExpIdx === null || this._conferirExpIdx === undefined) return;
     const item = this.data.expedicao[this._conferirExpIdx];
@@ -1915,13 +1928,13 @@ const App = {
     }
 
     if (!item.checklistCompleto && item.aceiteAcessorios === 'Sim') {
-      const master = this._promptMasterAuthorization();
+      const master = await this._promptMasterAuthorization();
       if (!master) return;
       item.autorizadoAdmin = true;
       item.autorizadoPor = master.nome;
       item.conferidoPor = master.nome;
     } else if (item.checklistCompleto && item.aceiteEquipamento === 'Sim' && item.aceiteAcessorios === 'Sim' && item.estadoGeral === 'Aprovado') {
-      const expedicao = this._promptExpedicaoDoubleCheck();
+      const expedicao = await this._promptExpedicaoDoubleCheck();
       if (!expedicao) return;
       item.autorizadoAdmin = expedicao.perfil === 'admin';
       item.autorizadoPor = expedicao.nome;
@@ -1946,7 +1959,7 @@ const App = {
     this._conferirExpIdx = null;
   },
 
-  salvarExpedicao(ev) {
+  async salvarExpedicao(ev) {
     ev.preventDefault();
     const gv = id => document.getElementById(id)?.value || '';
     const eq = gv('ex-equipamento').trim();
@@ -1959,7 +1972,7 @@ const App = {
       conferido: checks.includes(idx)
     }));
     const checklistCompleto = acessorios.length === 0 || acessorios.every(a => a.conferido);
-    const admin = !checklistCompleto ? this._promptMasterAuthorization() : null;
+    const admin = !checklistCompleto ? await this._promptMasterAuthorization() : null;
     if (!checklistCompleto && !admin) return;
 
     const e = {

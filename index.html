@@ -196,18 +196,19 @@
 </div>
 
 <!-- ✅ auth.js está em js/ -->
+<script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script>
   // ✅ app.html está na raiz, mesmo nível do index.html
   if (Auth.getSessao()) window.location.href = 'app.html';
 
-  function fazerLogin(ev) {
+  async function fazerLogin(ev) {
     ev.preventDefault();
     const user  = document.getElementById('login-user').value;
     const senha = document.getElementById('login-senha').value;
     const erro  = document.getElementById('login-erro');
 
-    if (Auth.login(user, senha)) {
+    if (await Auth.login(user, senha)) {
       // ✅ app.html na raiz
       window.location.href = 'app.html';
     } else {
