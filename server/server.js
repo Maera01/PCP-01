@@ -10,18 +10,14 @@ const crypto = require('crypto');
 const loadLocalEnv = () => {
   const envPath = path.join(__dirname, '.env');
   if (!fs.existsSync(envPath)) return;
-
   const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-
     const index = trimmed.indexOf('=');
     const key = trimmed.slice(0, index).trim();
     const value = trimmed.slice(index + 1).trim().replace(/^["']|["']$/g, '');
-    if (key && process.env[key] === undefined) {
-      process.env[key] = value;
-    }
+    if (key && process.env[key] === undefined) process.env[key] = value;
   }
 };
 
@@ -35,81 +31,56 @@ const DB_SCHEMA = process.env.DB_SCHEMA || 'controle_producao';
 
 const quoteIdentifier = (value) => {
   if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(value)) {
-    throw new Error('DB_SCHEMA invalido. Use apenas letras, numeros e underscore.');
+    throw new Error('Identificador invalido. Use apenas letras, numeros e underscore.');
   }
   return `"${value}"`;
 };
 
-const postgresTable = () => `${quoteIdentifier(DB_SCHEMA)}.app_data`;
-const postgresUsuariosTable = () => `${quoteIdentifier(DB_SCHEMA)}.usuarios`;
-const areaSchemaName = (area) => `${DB_SCHEMA}_${area}`;
-const areaSchema = (area) => quoteIdentifier(areaSchemaName(area));
-const areaTable = (area) => `${areaSchema(area)}.registros`;
-const postgresPedidosTable = () => areaTable('pedidos');
-const postgresExpedicaoTable = () => areaTable('expedicao');
-const postgresConcluidosTable = () => areaTable('concluidos');
-const postgresAuditoriaTable = () => areaTable('auditoria');
-const postgresLegacyPedidosTable = () => `${quoteIdentifier(DB_SCHEMA)}.pedidos`;
+// ── Todas as tabelas ficam dentro do mesmo schema ──
+const schema = () => quoteIdentifier(DB_SCHEMA);
+const table = (name) => `${schema()}."${name}"`;
+
+const postgresTable         = () => table('app_data');
+const postgresUsuariosTable = () => table('usuarios');
+const postgresPedidosTable  = () => table('pedidos');
+const postgresExpedicaoTable= () => table('expedicao');
+const postgresConcluidosTable=() => table('concluidos');
+const postgresAuditoriaTable= () => table('auditoria');
 
 const PERMISSOES = {
   admin: {
     paginas: ['dashboard', 'pedidos', 'expedicao', 'concluidos', 'auditoria', 'usuarios'],
-    criarPedido: true,
-    editarComercial: true,
-    editarAlmoxarifado: true,
-    editarProducao: true,
-    editarExpedicao: true,
-    excluir: true,
-    exportar: true
+    criarPedido: true, editarComercial: true, editarAlmoxarifado: true,
+    editarProducao: true, editarExpedicao: true, excluir: true, exportar: true
   },
   comercial: {
     paginas: ['dashboard', 'pedidos', 'concluidos'],
-    criarPedido: true,
-    editarComercial: true,
-    editarAlmoxarifado: false,
-    editarProducao: false,
-    editarExpedicao: false,
-    excluir: false,
-    exportar: false
+    criarPedido: true, editarComercial: true, editarAlmoxarifado: false,
+    editarProducao: false, editarExpedicao: false, excluir: false, exportar: false
   },
   almoxarifado: {
     paginas: ['dashboard', 'pedidos', 'concluidos'],
-    criarPedido: false,
-    editarComercial: false,
-    editarAlmoxarifado: true,
-    editarProducao: false,
-    editarExpedicao: false,
-    excluir: false,
-    exportar: false
+    criarPedido: false, editarComercial: false, editarAlmoxarifado: true,
+    editarProducao: false, editarExpedicao: false, excluir: false, exportar: false
   },
   producao: {
     paginas: ['dashboard', 'pedidos', 'concluidos'],
-    criarPedido: false,
-    editarComercial: false,
-    editarAlmoxarifado: false,
-    editarProducao: true,
-    editarExpedicao: false,
-    excluir: false,
-    exportar: false
+    criarPedido: false, editarComercial: false, editarAlmoxarifado: false,
+    editarProducao: true, editarExpedicao: false, excluir: false, exportar: false
   },
   expedicao: {
     paginas: ['dashboard', 'expedicao', 'concluidos'],
-    criarPedido: false,
-    editarComercial: false,
-    editarAlmoxarifado: false,
-    editarProducao: false,
-    editarExpedicao: true,
-    excluir: false,
-    exportar: false
+    criarPedido: false, editarComercial: false, editarAlmoxarifado: false,
+    editarProducao: false, editarExpedicao: true, excluir: false, exportar: false
   }
 };
 
 const DEFAULT_USUARIOS = [
-  { id: 'u001', nome: 'Admin Geral', login: 'admin', senha: 'admin123', perfil: 'admin' },
-  { id: 'u002', nome: 'Comercial', login: 'comercial', senha: 'com123', perfil: 'comercial' },
-  { id: 'u003', nome: 'Almoxarifado', login: 'almoxarifado', senha: 'alm123', perfil: 'almoxarifado' },
-  { id: 'u004', nome: 'Producao', login: 'producao', senha: 'prod123', perfil: 'producao' },
-  { id: 'u005', nome: 'Expedicao', login: 'expedicao', senha: 'exp123', perfil: 'expedicao' }
+  { id: 'u001', nome: 'Admin Geral',    login: 'admin',        senha: 'admin123',  perfil: 'admin' },
+  { id: 'u002', nome: 'Comercial',      login: 'comercial',    senha: 'com123',    perfil: 'comercial' },
+  { id: 'u003', nome: 'Almoxarifado',   login: 'almoxarifado', senha: 'alm123',    perfil: 'almoxarifado' },
+  { id: 'u004', nome: 'Producao',       login: 'producao',     senha: 'prod123',   perfil: 'producao' },
+  { id: 'u005', nome: 'Expedicao',      login: 'expedicao',    senha: 'exp123',    perfil: 'expedicao' }
 ];
 
 const novoIdUsuario = () => 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -140,17 +111,14 @@ const sanitizeUsuario = (usuario) => ({
     : (usuario.permissoes || {})
 });
 
-// Middlewares
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
-
-// Servir arquivos estáticos (HTML, CSS, JS) da pasta pai
 app.use(express.static(path.join(__dirname, '..')));
 
-// ── DATABASE INIT ──
 let db;
 let pool;
+
 const initDB = () => {
   if (USE_POSTGRES) {
     const shouldUseSSL =
@@ -163,75 +131,79 @@ const initDB = () => {
       ssl: shouldUseSSL ? { rejectUnauthorized: false } : false
     });
 
-    return createTables().then(() => {
-      console.log('Conectado ao PostgreSQL');
-    });
+    return createTables().then(() => console.log('Conectado ao PostgreSQL'));
   }
 
   return new Promise((resolve, reject) => {
     db = new sqlite3.Database(DB_PATH, (err) => {
-      if (err) {
-        console.error('Erro ao abrir DB:', err);
-        reject(err);
-      } else {
-        console.log('Conectado ao SQLite');
-        createTables().then(resolve).catch(reject);
-      }
+      if (err) { console.error('Erro ao abrir DB:', err); reject(err); }
+      else { console.log('Conectado ao SQLite'); createTables().then(resolve).catch(reject); }
     });
   });
 };
 
 const createTables = () => {
   if (USE_POSTGRES) {
-    const schema = quoteIdentifier(DB_SCHEMA);
-    const table = postgresTable();
-    const usuariosTable = postgresUsuariosTable();
-    const createAreaTableSql = (area, labelColumn = 'referencia') => `
-      CREATE SCHEMA IF NOT EXISTS ${areaSchema(area)};
-
-      CREATE TABLE IF NOT EXISTS ${areaTable(area)} (
-        id TEXT PRIMARY KEY,
-        ${labelColumn} TEXT,
-        dados JSONB NOT NULL,
-        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-    `;
-
+    // ── Cria 1 schema + 6 tabelas dentro dele ──
     return pool.query(`
-      CREATE SCHEMA IF NOT EXISTS ${schema};
+      CREATE SCHEMA IF NOT EXISTS ${schema()};
 
-      CREATE TABLE IF NOT EXISTS ${table} (
-        id SERIAL PRIMARY KEY,
-        data_key TEXT UNIQUE,
+      CREATE TABLE IF NOT EXISTS ${postgresTable()} (
+        id         SERIAL PRIMARY KEY,
+        data_key   TEXT UNIQUE NOT NULL,
         data_value TEXT,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
-      ${createAreaTableSql('pedidos', 'numero')}
-      ${createAreaTableSql('expedicao', 'referencia')}
-      ${createAreaTableSql('concluidos', 'referencia')}
-      ${createAreaTableSql('auditoria', 'acao')}
-      
-      CREATE TABLE IF NOT EXISTS ${usuariosTable} (
-        id TEXT PRIMARY KEY,
-        nome TEXT NOT NULL,
-        login TEXT NOT NULL UNIQUE,
+      CREATE TABLE IF NOT EXISTS ${postgresPedidosTable()} (
+        id            TEXT PRIMARY KEY,
+        numero        TEXT,
+        dados         JSONB NOT NULL,
+        criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ${postgresExpedicaoTable()} (
+        id            TEXT PRIMARY KEY,
+        referencia    TEXT,
+        dados         JSONB NOT NULL,
+        criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ${postgresConcluidosTable()} (
+        id            TEXT PRIMARY KEY,
+        referencia    TEXT,
+        dados         JSONB NOT NULL,
+        criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ${postgresAuditoriaTable()} (
+        id            TEXT PRIMARY KEY,
+        acao          TEXT,
+        dados         JSONB NOT NULL,
+        criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ${postgresUsuariosTable()} (
+        id            TEXT PRIMARY KEY,
+        nome          TEXT NOT NULL,
+        login         TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
-        perfil TEXT NOT NULL DEFAULT 'expedicao',
-        permissoes JSONB NOT NULL DEFAULT '{}'::jsonb,
-        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        perfil        TEXT NOT NULL DEFAULT 'expedicao',
+        permissoes    JSONB NOT NULL DEFAULT '{}'::jsonb,
+        criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `).then(async () => {
-      await migrarPedidosTabelaAntigaPostgres();
       await seedUsuarios();
     });
   }
 
   return new Promise((resolve, reject) => {
     db.serialize(() => {
-      // Tabela de dados globais (pedidos, kits, logs, etc)
       db.run(`
         CREATE TABLE IF NOT EXISTS app_data (
           id INTEGER PRIMARY KEY,
@@ -240,24 +212,22 @@ const createTables = () => {
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `, (err) => {
-        if (err) reject(err);
-        else {
-          db.run(`
-            CREATE TABLE IF NOT EXISTS usuarios (
-              id TEXT PRIMARY KEY,
-              nome TEXT NOT NULL,
-              login TEXT NOT NULL UNIQUE,
-              password_hash TEXT NOT NULL,
-              perfil TEXT NOT NULL DEFAULT 'expedicao',
-              permissoes TEXT NOT NULL DEFAULT '{}',
-              criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
-              atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-          `, (userErr) => {
-            if (userErr) reject(userErr);
-            else seedUsuarios().then(resolve).catch(reject);
-          });
-        }
+        if (err) return reject(err);
+        db.run(`
+          CREATE TABLE IF NOT EXISTS usuarios (
+            id TEXT PRIMARY KEY,
+            nome TEXT NOT NULL,
+            login TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            perfil TEXT NOT NULL DEFAULT 'expedicao',
+            permissoes TEXT NOT NULL DEFAULT '{}',
+            criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+            atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `, (userErr) => {
+          if (userErr) reject(userErr);
+          else seedUsuarios().then(resolve).catch(reject);
+        });
       });
     });
   });
@@ -266,12 +236,8 @@ const createTables = () => {
 const seedUsuarios = async () => {
   const count = await contarUsuarios();
   if (count > 0) return;
-
   for (const usuario of DEFAULT_USUARIOS) {
-    await inserirUsuario({
-      ...usuario,
-      permissoes: PERMISSOES[usuario.perfil] || {}
-    });
+    await inserirUsuario({ ...usuario, permissoes: PERMISSOES[usuario.perfil] || {} });
   }
 };
 
@@ -280,11 +246,9 @@ const contarUsuarios = async () => {
     const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresUsuariosTable()}`);
     return result.rows[0]?.total || 0;
   }
-
   return new Promise((resolve, reject) => {
     db.get('SELECT COUNT(*) AS total FROM usuarios', (err, row) => {
-      if (err) reject(err);
-      else resolve(row?.total || 0);
+      if (err) reject(err); else resolve(row?.total || 0);
     });
   });
 };
@@ -296,11 +260,9 @@ const listarUsuarios = async () => {
     );
     return result.rows.map(sanitizeUsuario);
   }
-
   return new Promise((resolve, reject) => {
     db.all('SELECT id, nome, login, perfil, permissoes FROM usuarios ORDER BY nome', (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows.map(sanitizeUsuario));
+      if (err) reject(err); else resolve(rows.map(sanitizeUsuario));
     });
   });
 };
@@ -308,16 +270,13 @@ const listarUsuarios = async () => {
 const buscarUsuarioPorLogin = async (login) => {
   if (USE_POSTGRES) {
     const result = await pool.query(
-      `SELECT * FROM ${postgresUsuariosTable()} WHERE login = $1`,
-      [String(login).trim()]
+      `SELECT * FROM ${postgresUsuariosTable()} WHERE login = $1`, [String(login).trim()]
     );
     return result.rows[0] || null;
   }
-
   return new Promise((resolve, reject) => {
     db.get('SELECT * FROM usuarios WHERE login = ?', [String(login).trim()], (err, row) => {
-      if (err) reject(err);
-      else resolve(row || null);
+      if (err) reject(err); else resolve(row || null);
     });
   });
 };
@@ -362,10 +321,7 @@ const atualizarUsuario = async (id, patch) => {
   if (USE_POSTGRES) {
     const params = [id, nome, login, perfil, JSON.stringify(permissoes)];
     let senhaSql = '';
-    if (senha) {
-      params.push(hashSenha(senha));
-      senhaSql = `, password_hash = $${params.length}`;
-    }
+    if (senha) { params.push(hashSenha(senha)); senhaSql = `, password_hash = $${params.length}`; }
     const result = await pool.query(
       `UPDATE ${postgresUsuariosTable()}
        SET nome = $2, login = $3, perfil = $4, permissoes = $5::jsonb, atualizado_em = CURRENT_TIMESTAMP${senhaSql}
@@ -379,20 +335,16 @@ const atualizarUsuario = async (id, patch) => {
   return new Promise((resolve, reject) => {
     const params = [nome, login, perfil, JSON.stringify(permissoes)];
     let senhaSql = '';
-    if (senha) {
-      params.push(hashSenha(senha));
-      senhaSql = ', password_hash = ?';
-    }
+    if (senha) { params.push(hashSenha(senha)); senhaSql = ', password_hash = ?'; }
     params.push(id);
     db.run(
       `UPDATE usuarios SET nome = ?, login = ?, perfil = ?, permissoes = ?, atualizado_em = CURRENT_TIMESTAMP${senhaSql} WHERE id = ?`,
       params,
-      function onUpdate(err) {
+      function (err) {
         if (err) return reject(err);
         if (this.changes === 0) return resolve(null);
         db.get('SELECT id, nome, login, perfil, permissoes FROM usuarios WHERE id = ?', [id], (getErr, row) => {
-          if (getErr) reject(getErr);
-          else resolve(row ? sanitizeUsuario(row) : null);
+          if (getErr) reject(getErr); else resolve(row ? sanitizeUsuario(row) : null);
         });
       }
     );
@@ -404,92 +356,42 @@ const removerUsuario = async (id) => {
     const result = await pool.query(`DELETE FROM ${postgresUsuariosTable()} WHERE id = $1`, [id]);
     return result.rowCount > 0;
   }
-
   return new Promise((resolve, reject) => {
-    db.run('DELETE FROM usuarios WHERE id = ?', [id], function onDelete(err) {
-      if (err) reject(err);
-      else resolve(this.changes > 0);
+    db.run('DELETE FROM usuarios WHERE id = ?', [id], function (err) {
+      if (err) reject(err); else resolve(this.changes > 0);
     });
   });
 };
 
-// ── HELPER: Salvar/Carregar dados JSON na tabela ──
-const migrarPedidosTabelaAntigaPostgres = async () => {
-  if (!USE_POSTGRES) return;
+// ── Helpers de label ──
+const numeroPedido     = (p) => String(p?.numero || p?.numeroOP || p?.serie || p?.id || '').trim();
+const referenciaItem   = (i) => String(i?.equipamento || i?.serie || i?.id || '').trim();
+const acaoAuditoria    = (l) => String(l?.action || l?.id || '').trim();
 
-  const legacyTableName = `${DB_SCHEMA}.pedidos`;
-  const exists = await pool.query('SELECT to_regclass($1) AS table_name', [legacyTableName]);
-  if (!exists.rows[0]?.table_name) return;
-
-  const current = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresPedidosTable()}`);
-  if ((current.rows[0]?.total || 0) > 0) return;
-
-  await pool.query(`
-    INSERT INTO ${postgresPedidosTable()} (id, numero, dados, criado_em, atualizado_em)
-    SELECT id, numero, dados, criado_em, atualizado_em
-    FROM ${postgresLegacyPedidosTable()}
-    ON CONFLICT (id)
-    DO UPDATE SET
-      numero = EXCLUDED.numero,
-      dados = EXCLUDED.dados,
-      atualizado_em = EXCLUDED.atualizado_em
-  `);
-};
-
-const numeroPedido = (pedido) => {
-  return String(
-    pedido?.numero ||
-    pedido?.numeroOP ||
-    pedido?.serie ||
-    pedido?.id ||
-    ''
-  ).trim();
-};
-
-const referenciaExpedicao = (item) => {
-  return String(
-    item?.equipamento ||
-    item?.serie ||
-    item?.id ||
-    ''
-  ).trim();
-};
-
-const acaoAuditoria = (log) => String(log?.action || log?.id || '').trim();
-
-const salvarRegistrosPostgres = async (table, labelColumn, registros, labelFn) => {
+const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => {
   if (!Array.isArray(registros)) return;
-
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-
     const ids = [];
-    for (const registro of registros) {
-      if (!registro?.id) continue;
-      ids.push(String(registro.id));
-
+    for (const reg of registros) {
+      if (!reg?.id) continue;
+      ids.push(String(reg.id));
       await client.query(
-        `INSERT INTO ${table} (id, ${quoteIdentifier(labelColumn)}, dados, criado_em, atualizado_em)
+        `INSERT INTO ${tbl} (id, "${labelColumn}", dados, criado_em, atualizado_em)
          VALUES ($1, $2, $3::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         ON CONFLICT (id)
-         DO UPDATE SET
-           ${quoteIdentifier(labelColumn)} = EXCLUDED.${quoteIdentifier(labelColumn)},
+         ON CONFLICT (id) DO UPDATE SET
+           "${labelColumn}" = EXCLUDED."${labelColumn}",
            dados = EXCLUDED.dados,
            atualizado_em = CURRENT_TIMESTAMP`,
-        [String(registro.id), labelFn(registro), JSON.stringify(registro)]
+        [String(reg.id), labelFn(reg), JSON.stringify(reg)]
       );
     }
-
     if (ids.length) {
-      await client.query(
-        `DELETE FROM ${table} WHERE NOT (id = ANY($1::text[]))`,
-        [ids]
-      );
+      await client.query(`DELETE FROM ${tbl} WHERE NOT (id = ANY($1::text[]))`, [ids]);
     } else {
-      await client.query(`DELETE FROM ${table}`);
+      await client.query(`DELETE FROM ${tbl}`);
     }
-
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -499,52 +401,25 @@ const salvarRegistrosPostgres = async (table, labelColumn, registros, labelFn) =
   }
 };
 
-const salvarPedidosPostgres = (pedidos) => {
-  return salvarRegistrosPostgres(postgresPedidosTable(), 'numero', pedidos, numeroPedido);
-};
+const salvarPedidosPostgres   = (r) => salvarRegistrosPostgres(postgresPedidosTable(),   'numero',    r, numeroPedido);
+const salvarExpedicaoPostgres  = (r) => salvarRegistrosPostgres(postgresExpedicaoTable(), 'referencia',r, referenciaItem);
+const salvarConcluidosPostgres = (r) => salvarRegistrosPostgres(postgresConcluidosTable(),'referencia',r, referenciaItem);
+const salvarAuditoriaPostgres  = (r) => salvarRegistrosPostgres(postgresAuditoriaTable(), 'acao',      r, acaoAuditoria);
 
-const salvarExpedicaoPostgres = (expedicao) => {
-  return salvarRegistrosPostgres(postgresExpedicaoTable(), 'referencia', expedicao, referenciaExpedicao);
-};
-
-const salvarConcluidosPostgres = (concluidos) => {
-  return salvarRegistrosPostgres(postgresConcluidosTable(), 'referencia', concluidos, referenciaExpedicao);
-};
-
-const salvarAuditoriaPostgres = (logs) => {
-  return salvarRegistrosPostgres(postgresAuditoriaTable(), 'acao', logs, acaoAuditoria);
-};
-
-const carregarPedidosPostgres = async () => {
-  const result = await pool.query(
-    `SELECT dados FROM ${postgresPedidosTable()} ORDER BY criado_em DESC`
-  );
+const carregarRegistrosPostgres = async (tbl, order = 'criado_em DESC') => {
+  const result = await pool.query(`SELECT dados FROM ${tbl} ORDER BY ${order}`);
   return result.rows.map(row => row.dados);
 };
 
-const carregarRegistrosPostgres = async (table, orderBy = 'criado_em DESC') => {
-  const result = await pool.query(`SELECT dados FROM ${table} ORDER BY ${orderBy}`);
-  return result.rows.map(row => row.dados);
-};
-
-const carregarExpedicaoPostgres = () => carregarRegistrosPostgres(postgresExpedicaoTable());
+const carregarPedidosPostgres   = () => carregarRegistrosPostgres(postgresPedidosTable());
+const carregarExpedicaoPostgres  = () => carregarRegistrosPostgres(postgresExpedicaoTable());
 const carregarConcluidosPostgres = () => carregarRegistrosPostgres(postgresConcluidosTable());
-const carregarAuditoriaPostgres = () => carregarRegistrosPostgres(postgresAuditoriaTable(), 'criado_em DESC');
+const carregarAuditoriaPostgres  = () => carregarRegistrosPostgres(postgresAuditoriaTable());
 
-const migrarAreaSeNecessario = async (table, registros, salvarFn) => {
-  if (!Array.isArray(registros) || registros.length === 0) return;
-
-  const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${table}`);
-  if (result.rows[0]?.total === 0) await salvarFn(registros);
-};
-
-const dividirExpedicao = (expedicao = []) => {
-  const lista = Array.isArray(expedicao) ? expedicao : [];
-  return {
-    expedicaoAberta: lista.filter(item => item.statusConferencia !== 'Aceito'),
-    concluidos: lista.filter(item => item.statusConferencia === 'Aceito')
-  };
-};
+const dividirExpedicao = (expedicao = []) => ({
+  expedicaoAberta: expedicao.filter(i => i.statusConferencia !== 'Aceito'),
+  concluidos:      expedicao.filter(i => i.statusConferencia === 'Aceito')
+});
 
 const salvarAreasPostgres = async (data) => {
   const { expedicaoAberta, concluidos } = dividirExpedicao(data?.expedicao || []);
@@ -554,65 +429,45 @@ const salvarAreasPostgres = async (data) => {
   await salvarAuditoriaPostgres(data?.logs || []);
 };
 
-const migrarAreasSeNecessario = async (data) => {
-  if (!data) return;
-  const { expedicaoAberta, concluidos } = dividirExpedicao(data.expedicao || []);
-
-  await migrarAreaSeNecessario(postgresPedidosTable(), data.pedidos, salvarPedidosPostgres);
-  await migrarAreaSeNecessario(postgresExpedicaoTable(), expedicaoAberta, salvarExpedicaoPostgres);
-  await migrarAreaSeNecessario(postgresConcluidosTable(), concluidos, salvarConcluidosPostgres);
-  await migrarAreaSeNecessario(postgresAuditoriaTable(), data.logs, salvarAuditoriaPostgres);
-};
-
 const saveData = (key, value) => {
   if (USE_POSTGRES) {
     const valueToStore = key === 'app_data' && value
       ? { ...value, pedidos: [], expedicao: [], logs: [] }
       : value;
-    const json = JSON.stringify(valueToStore);
     return pool.query(
       `INSERT INTO ${postgresTable()} (data_key, data_value, updated_at)
        VALUES ($1, $2, CURRENT_TIMESTAMP)
-       ON CONFLICT (data_key)
-       DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
-      [key, json]
+       ON CONFLICT (data_key) DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
+      [key, JSON.stringify(valueToStore)]
     ).then(async () => {
-      if (key === 'app_data') {
-        await salvarAreasPostgres(value || {});
-      }
+      if (key === 'app_data') await salvarAreasPostgres(value || {});
     });
   }
 
   return new Promise((resolve, reject) => {
-    const json = JSON.stringify(value);
     db.run(
       `INSERT OR REPLACE INTO app_data (data_key, data_value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
-      [key, json],
-      (err) => {
-        if (err) reject(err);
-        else resolve();
-      }
+      [key, JSON.stringify(value)],
+      (err) => err ? reject(err) : resolve()
     );
   });
 };
 
 const loadData = (key) => {
   if (USE_POSTGRES) {
-    return pool
-      .query(`SELECT data_value FROM ${postgresTable()} WHERE data_key = $1`, [key])
+    return pool.query(`SELECT data_value FROM ${postgresTable()} WHERE data_key = $1`, [key])
       .then(async result => {
         const value = result.rows[0]?.data_value;
         const data = value ? JSON.parse(value) : null;
         if (key !== 'app_data') return data;
 
-        await migrarAreasSeNecessario(data);
-        const pedidos = await carregarPedidosPostgres();
+        const pedidos   = await carregarPedidosPostgres();
         const expedicao = await carregarExpedicaoPostgres();
-        const concluidos = await carregarConcluidosPostgres();
-        const logs = await carregarAuditoriaPostgres();
-        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length) {
-          return null;
-        }
+        const concluidos= await carregarConcluidosPostgres();
+        const logs      = await carregarAuditoriaPostgres();
+
+        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length) return null;
+
         return {
           ...(data || { kits: [], produtos: [], criadoEm: new Date().toISOString() }),
           pedidos,
@@ -623,95 +478,63 @@ const loadData = (key) => {
   }
 
   return new Promise((resolve, reject) => {
-    db.get(
-      `SELECT data_value FROM app_data WHERE data_key = ?`,
-      [key],
-      (err, row) => {
-        if (err) reject(err);
-        else resolve(row ? JSON.parse(row.data_value) : null);
-      }
-    );
+    db.get(`SELECT data_value FROM app_data WHERE data_key = ?`, [key], (err, row) => {
+      if (err) reject(err); else resolve(row ? JSON.parse(row.data_value) : null);
+    });
   });
 };
 
 // ── ROUTES ──
-
-// GET /api/data - Carregar todos os dados (pedidos, kits, logs, etc)
 app.get('/api/data', async (req, res) => {
   try {
     const data = await loadData('app_data') || {
-      pedidos: [],
-      expedicao: [],
-      kits: [],
-      logs: [],
-      criadoEm: new Date().toISOString()
+      pedidos: [], expedicao: [], kits: [], logs: [], criadoEm: new Date().toISOString()
     };
     res.json({ success: true, data });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// POST /api/data - Salvar todos os dados
 app.post('/api/data', async (req, res) => {
   try {
     const { data } = req.body;
-    if (!data) {
-      return res.status(400).json({ success: false, error: 'data is required' });
-    }
+    if (!data) return res.status(400).json({ success: false, error: 'data is required' });
     await saveData('app_data', data);
     res.json({ success: true, message: 'Dados salvos com sucesso' });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// GET /api/health - Health check
-app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
-});
+app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { login, senha } = req.body || {};
     const usuario = await buscarUsuarioPorLogin(login);
-    if (!usuario || !validarSenha(senha, usuario.password_hash)) {
+    if (!usuario || !validarSenha(senha, usuario.password_hash))
       return res.status(401).json({ success: false, error: 'Usuario ou senha invalidos' });
-    }
     res.json({ success: true, user: sanitizeUsuario(usuario) });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
 app.post('/api/auth/validate', async (req, res) => {
   try {
     const { login, senha } = req.body || {};
     const usuario = await buscarUsuarioPorLogin(login);
-    if (!usuario || !validarSenha(senha, usuario.password_hash)) {
+    if (!usuario || !validarSenha(senha, usuario.password_hash))
       return res.status(401).json({ success: false, error: 'Credenciais invalidas' });
-    }
     res.json({ success: true, user: sanitizeUsuario(usuario) });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
 app.get('/api/users', async (req, res) => {
-  try {
-    const users = await listarUsuarios();
-    res.json({ success: true, users });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  try { res.json({ success: true, users: await listarUsuarios() }); }
+  catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
 app.post('/api/users', async (req, res) => {
   try {
     const { nome, login, senha, perfil, permissoes } = req.body || {};
-    if (!nome || !login || !senha) {
+    if (!nome || !login || !senha)
       return res.status(400).json({ success: false, error: 'nome, login e senha sao obrigatorios' });
-    }
     const user = await inserirUsuario({ nome, login, senha, perfil, permissoes });
     res.status(201).json({ success: true, user });
   } catch (err) {
@@ -723,9 +546,8 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { nome, login, perfil, permissoes, senha } = req.body || {};
-    if (!nome || !login) {
+    if (!nome || !login)
       return res.status(400).json({ success: false, error: 'nome e login sao obrigatorios' });
-    }
     const user = await atualizarUsuario(req.params.id, { nome, login, perfil, permissoes, senha });
     if (!user) return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
     res.json({ success: true, user });
@@ -740,25 +562,19 @@ app.delete('/api/users/:id', async (req, res) => {
     const removed = await removerUsuario(req.params.id);
     if (!removed) return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
     res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// POST /api/backup - Fazer backup (salva com timestamp)
 app.post('/api/backup', async (req, res) => {
   try {
     const data = await loadData('app_data');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-    const backupKey = `app_data_backup_${timestamp}`;
-    await saveData(backupKey, data);
-    res.json({ success: true, message: 'Backup criado', backupKey });
-  } catch (err) {
-    res.status(500).json({ success: false, error: err.message });
-  }
+    await saveData(`app_data_backup_${timestamp}`, data);
+    res.json({ success: true, message: 'Backup criado' });
+  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
 });
 
-// ── START SERVER ──
+// ── START ──
 const startServer = async () => {
   try {
     await initDB();
@@ -768,25 +584,16 @@ const startServer = async () => {
       let localIP = 'localhost';
       for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-          if (iface.family === 'IPv4' && !iface.internal) {
-            localIP = iface.address;
-            break;
-          }
+          if (iface.family === 'IPv4' && !iface.internal) { localIP = iface.address; break; }
         }
       }
       console.log(`✓ Servidor rodando em http://${localIP}:${PORT}`);
       console.log(`✓ URL Local: http://localhost:${PORT}`);
-      console.log(`✓ Banco de dados: ${USE_POSTGRES ? `PostgreSQL schema ${DB_SCHEMA}` : DB_PATH}`);
-      console.log(`✓ API endpoints:`);
-      console.log(`  GET  /api/data       - Carregar dados`);
-      console.log(`  POST /api/data       - Salvar dados`);
-      console.log(`  POST /api/backup     - Fazer backup`);
-      console.log(`  GET  /api/health     - Health check`);
+      console.log(`✓ Banco: ${USE_POSTGRES ? `PostgreSQL schema "${DB_SCHEMA}"` : DB_PATH}`);
+      console.log(`✓ Tabelas: app_data | pedidos | expedicao | concluidos | auditoria | usuarios`);
     });
   } catch (err) {
     console.error('Erro ao iniciar servidor:', err);
     process.exit(1);
   }
 };
-
-startServer();
