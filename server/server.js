@@ -41,8 +41,15 @@ const quoteIdentifier = (value) => {
 };
 
 const postgresTable = () => `${quoteIdentifier(DB_SCHEMA)}.app_data`;
-const postgresPedidosTable = () => `${quoteIdentifier(DB_SCHEMA)}.pedidos`;
 const postgresUsuariosTable = () => `${quoteIdentifier(DB_SCHEMA)}.usuarios`;
+const areaSchemaName = (area) => `${DB_SCHEMA}_${area}`;
+const areaSchema = (area) => quoteIdentifier(areaSchemaName(area));
+const areaTable = (area) => `${areaSchema(area)}.registros`;
+const postgresPedidosTable = () => areaTable('pedidos');
+const postgresExpedicaoTable = () => areaTable('expedicao');
+const postgresConcluidosTable = () => areaTable('concluidos');
+const postgresAuditoriaTable = () => areaTable('auditoria');
+const postgresLegacyPedidosTable = () => `${quoteIdentifier(DB_SCHEMA)}.pedidos`;
 
 const PERMISSOES = {
   admin: {
@@ -178,8 +185,18 @@ const createTables = () => {
   if (USE_POSTGRES) {
     const schema = quoteIdentifier(DB_SCHEMA);
     const table = postgresTable();
-    const pedidosTable = postgresPedidosTable();
     const usuariosTable = postgresUsuariosTable();
+    const createAreaTableSql = (area, labelColumn = 'referencia') => `
+      CREATE SCHEMA IF NOT EXISTS ${areaSchema(area)};
+
+      CREATE TABLE IF NOT EXISTS ${areaTable(area)} (
+        id TEXT PRIMARY KEY,
+        ${labelColumn} TEXT,
+        dados JSONB NOT NULL,
+        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `;
 
     return pool.query(`
       CREATE SCHEMA IF NOT EXISTS ${schema};
@@ -191,13 +208,10 @@ const createTables = () => {
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
-      CREATE TABLE IF NOT EXISTS ${pedidosTable} (
-        id TEXT PRIMARY KEY,
-        numero TEXT,
-        dados JSONB NOT NULL,
-        criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
+      ${createAreaTableSql('pedidos', 'numero')}
+      ${createAreaTableSql('expedicao', 'referencia')}
+      ${createAreaTableSql('concluidos', 'referencia')}
+      ${createAreaTableSql('auditoria', 'acao')}
       
       CREATE TABLE IF NOT EXISTS ${usuariosTable} (
         id TEXT PRIMARY KEY,
@@ -209,7 +223,10 @@ const createTables = () => {
         criado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
-    `).then(seedUsuarios);
+    `).then(async () => {
+      await migrarPedidosTabelaAntigaPostgres();
+      await seedUsuarios();
+    });
   }
 
   return new Promise((resolve, reject) => {
@@ -397,6 +414,28 @@ const removerUsuario = async (id) => {
 };
 
 // ── HELPER: Salvar/Carregar dados JSON na tabela ──
+const migrarPedidosTabelaAntigaPostgres = async () => {
+  if (!USE_POSTGRES) return;
+
+  const legacyTableName = `${DB_SCHEMA}.pedidos`;
+  const exists = await pool.query('SELECT to_regclass($1) AS table_name', [legacyTableName]);
+  if (!exists.rows[0]?.table_name) return;
+
+  const current = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresPedidosTable()}`);
+  if ((current.rows[0]?.total || 0) > 0) return;
+
+  await pool.query(`
+    INSERT INTO ${postgresPedidosTable()} (id, numero, dados, criado_em, atualizado_em)
+    SELECT id, numero, dados, criado_em, atualizado_em
+    FROM ${postgresLegacyPedidosTable()}
+    ON CONFLICT (id)
+    DO UPDATE SET
+      numero = EXCLUDED.numero,
+      dados = EXCLUDED.dados,
+      atualizado_em = EXCLUDED.atualizado_em
+  `);
+};
+
 const numeroPedido = (pedido) => {
   return String(
     pedido?.numero ||
@@ -407,37 +446,48 @@ const numeroPedido = (pedido) => {
   ).trim();
 };
 
-const salvarPedidosPostgres = async (pedidos) => {
-  if (!Array.isArray(pedidos)) return;
+const referenciaExpedicao = (item) => {
+  return String(
+    item?.equipamento ||
+    item?.serie ||
+    item?.id ||
+    ''
+  ).trim();
+};
+
+const acaoAuditoria = (log) => String(log?.action || log?.id || '').trim();
+
+const salvarRegistrosPostgres = async (table, labelColumn, registros, labelFn) => {
+  if (!Array.isArray(registros)) return;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
 
     const ids = [];
-    for (const pedido of pedidos) {
-      if (!pedido?.id) continue;
-      ids.push(String(pedido.id));
+    for (const registro of registros) {
+      if (!registro?.id) continue;
+      ids.push(String(registro.id));
 
       await client.query(
-        `INSERT INTO ${postgresPedidosTable()} (id, numero, dados, criado_em, atualizado_em)
+        `INSERT INTO ${table} (id, ${quoteIdentifier(labelColumn)}, dados, criado_em, atualizado_em)
          VALUES ($1, $2, $3::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (id)
          DO UPDATE SET
-           numero = EXCLUDED.numero,
+           ${quoteIdentifier(labelColumn)} = EXCLUDED.${quoteIdentifier(labelColumn)},
            dados = EXCLUDED.dados,
            atualizado_em = CURRENT_TIMESTAMP`,
-        [String(pedido.id), numeroPedido(pedido), JSON.stringify(pedido)]
+        [String(registro.id), labelFn(registro), JSON.stringify(registro)]
       );
     }
 
     if (ids.length) {
       await client.query(
-        `DELETE FROM ${postgresPedidosTable()} WHERE NOT (id = ANY($1::text[]))`,
+        `DELETE FROM ${table} WHERE NOT (id = ANY($1::text[]))`,
         [ids]
       );
     } else {
-      await client.query(`DELETE FROM ${postgresPedidosTable()}`);
+      await client.query(`DELETE FROM ${table}`);
     }
 
     await client.query('COMMIT');
@@ -449,6 +499,22 @@ const salvarPedidosPostgres = async (pedidos) => {
   }
 };
 
+const salvarPedidosPostgres = (pedidos) => {
+  return salvarRegistrosPostgres(postgresPedidosTable(), 'numero', pedidos, numeroPedido);
+};
+
+const salvarExpedicaoPostgres = (expedicao) => {
+  return salvarRegistrosPostgres(postgresExpedicaoTable(), 'referencia', expedicao, referenciaExpedicao);
+};
+
+const salvarConcluidosPostgres = (concluidos) => {
+  return salvarRegistrosPostgres(postgresConcluidosTable(), 'referencia', concluidos, referenciaExpedicao);
+};
+
+const salvarAuditoriaPostgres = (logs) => {
+  return salvarRegistrosPostgres(postgresAuditoriaTable(), 'acao', logs, acaoAuditoria);
+};
+
 const carregarPedidosPostgres = async () => {
   const result = await pool.query(
     `SELECT dados FROM ${postgresPedidosTable()} ORDER BY criado_em DESC`
@@ -456,19 +522,52 @@ const carregarPedidosPostgres = async () => {
   return result.rows.map(row => row.dados);
 };
 
-const migrarPedidosSeNecessario = async (data) => {
-  if (!data || !Array.isArray(data.pedidos) || data.pedidos.length === 0) return;
+const carregarRegistrosPostgres = async (table, orderBy = 'criado_em DESC') => {
+  const result = await pool.query(`SELECT dados FROM ${table} ORDER BY ${orderBy}`);
+  return result.rows.map(row => row.dados);
+};
 
-  const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${postgresPedidosTable()}`);
-  if (result.rows[0]?.total === 0) {
-    await salvarPedidosPostgres(data.pedidos);
-  }
+const carregarExpedicaoPostgres = () => carregarRegistrosPostgres(postgresExpedicaoTable());
+const carregarConcluidosPostgres = () => carregarRegistrosPostgres(postgresConcluidosTable());
+const carregarAuditoriaPostgres = () => carregarRegistrosPostgres(postgresAuditoriaTable(), 'criado_em DESC');
+
+const migrarAreaSeNecessario = async (table, registros, salvarFn) => {
+  if (!Array.isArray(registros) || registros.length === 0) return;
+
+  const result = await pool.query(`SELECT COUNT(*)::int AS total FROM ${table}`);
+  if (result.rows[0]?.total === 0) await salvarFn(registros);
+};
+
+const dividirExpedicao = (expedicao = []) => {
+  const lista = Array.isArray(expedicao) ? expedicao : [];
+  return {
+    expedicaoAberta: lista.filter(item => item.statusConferencia !== 'Aceito'),
+    concluidos: lista.filter(item => item.statusConferencia === 'Aceito')
+  };
+};
+
+const salvarAreasPostgres = async (data) => {
+  const { expedicaoAberta, concluidos } = dividirExpedicao(data?.expedicao || []);
+  await salvarPedidosPostgres(data?.pedidos || []);
+  await salvarExpedicaoPostgres(expedicaoAberta);
+  await salvarConcluidosPostgres(concluidos);
+  await salvarAuditoriaPostgres(data?.logs || []);
+};
+
+const migrarAreasSeNecessario = async (data) => {
+  if (!data) return;
+  const { expedicaoAberta, concluidos } = dividirExpedicao(data.expedicao || []);
+
+  await migrarAreaSeNecessario(postgresPedidosTable(), data.pedidos, salvarPedidosPostgres);
+  await migrarAreaSeNecessario(postgresExpedicaoTable(), expedicaoAberta, salvarExpedicaoPostgres);
+  await migrarAreaSeNecessario(postgresConcluidosTable(), concluidos, salvarConcluidosPostgres);
+  await migrarAreaSeNecessario(postgresAuditoriaTable(), data.logs, salvarAuditoriaPostgres);
 };
 
 const saveData = (key, value) => {
   if (USE_POSTGRES) {
     const valueToStore = key === 'app_data' && value
-      ? { ...value, pedidos: [] }
+      ? { ...value, pedidos: [], expedicao: [], logs: [] }
       : value;
     const json = JSON.stringify(valueToStore);
     return pool.query(
@@ -479,7 +578,7 @@ const saveData = (key, value) => {
       [key, json]
     ).then(async () => {
       if (key === 'app_data') {
-        await salvarPedidosPostgres(value?.pedidos || []);
+        await salvarAreasPostgres(value || {});
       }
     });
   }
@@ -504,11 +603,22 @@ const loadData = (key) => {
       .then(async result => {
         const value = result.rows[0]?.data_value;
         const data = value ? JSON.parse(value) : null;
-        if (key !== 'app_data' || !data) return data;
+        if (key !== 'app_data') return data;
 
-        await migrarPedidosSeNecessario(data);
+        await migrarAreasSeNecessario(data);
         const pedidos = await carregarPedidosPostgres();
-        return { ...data, pedidos };
+        const expedicao = await carregarExpedicaoPostgres();
+        const concluidos = await carregarConcluidosPostgres();
+        const logs = await carregarAuditoriaPostgres();
+        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length) {
+          return null;
+        }
+        return {
+          ...(data || { kits: [], produtos: [], criadoEm: new Date().toISOString() }),
+          pedidos,
+          expedicao: [...expedicao, ...concluidos],
+          logs
+        };
       });
   }
 
