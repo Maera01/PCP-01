@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────
 -- Schema unificado: controle_producao
--- 6 tabelas: dashboard, pedidos, expedicao, concluidos,
---            auditoria, usuarios
+-- 7 tabelas: dashboard, pedidos, expedicao, concluidos,
+--            auditoria, usuarios, kits
 -- ─────────────────────────────────────────────────────────────
 
 CREATE SCHEMA IF NOT EXISTS controle_producao;
@@ -80,6 +80,18 @@ CREATE TABLE IF NOT EXISTS controle_producao.usuarios (
   atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
 );
 
+-- ─────────────────────────────────────────────
+-- 7. kits
+-- Kits de produtos cadastrados
+-- ─────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS controle_producao.kits (
+  id            TEXT PRIMARY KEY,
+  nome          TEXT,
+  dados         JSONB NOT NULL,
+  criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- ═════════════════════════════════════════════
 -- MIGRACOES DE DADOS ANTIGOS
@@ -154,7 +166,7 @@ BEGIN
   END IF;
 END $$;
 
--- Migracao do JSON legado dentro de controle_producao.app_data ou dashboard
+-- Migracao do JSON legado dentro de controle_producao.dashboard
 DO $$
 DECLARE
   app_json JSONB;
@@ -219,6 +231,19 @@ BEGIN
   WHERE item.dados ? 'id'
   ON CONFLICT (id) DO UPDATE SET
     acao          = EXCLUDED.acao,
+    dados         = EXCLUDED.dados,
+    atualizado_em = CURRENT_TIMESTAMP;
+
+  -- Kits
+  INSERT INTO controle_producao.kits (id, nome, dados)
+  SELECT
+    item.dados->>'id',
+    COALESCE(item.dados->>'nome', item.dados->>'id'),
+    item.dados
+  FROM jsonb_array_elements(COALESCE(app_json->'kits', '[]'::jsonb)) AS item(dados)
+  WHERE item.dados ? 'id'
+  ON CONFLICT (id) DO UPDATE SET
+    nome          = EXCLUDED.nome,
     dados         = EXCLUDED.dados,
     atualizado_em = CURRENT_TIMESTAMP;
 

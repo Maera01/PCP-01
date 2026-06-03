@@ -50,6 +50,7 @@ const postgresExpedicaoTable  = () => table('expedicao');
 const postgresConcluidosTable = () => table('concluidos');
 const postgresAuditoriaTable  = () => table('auditoria');
 const postgresUsuariosTable   = () => table('usuarios');
+const postgresKitsTable       = () => table('kits');
 
 const PERMISSOES = {
   admin: {
@@ -182,7 +183,7 @@ const initDB = () => {
 
 const createTables = () => {
   if (USE_POSTGRES) {
-    // ── 1 schema, 6 tabelas ──
+    // ── 1 schema, 7 tabelas ──
     return pool.query(`
       CREATE SCHEMA IF NOT EXISTS ${schema()};
 
@@ -232,6 +233,14 @@ const createTables = () => {
         password_hash TEXT NOT NULL,
         perfil        TEXT NOT NULL DEFAULT 'expedicao',
         permissoes    JSONB NOT NULL DEFAULT '{}'::jsonb,
+        criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS ${postgresKitsTable()} (
+        id            TEXT PRIMARY KEY,
+        nome          TEXT,
+        dados         JSONB NOT NULL,
         criado_em     TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         atualizado_em TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
@@ -425,6 +434,9 @@ const referenciaExpedicao = (item) =>
 const acaoAuditoria = (log) =>
   String(log?.action || log?.id || '').trim();
 
+const nomeKit = (kit) =>
+  String(kit?.nome || kit?.id || '').trim();
+
 // ── SALVAR/CARREGAR REGISTROS (PostgreSQL) ──
 const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => {
   if (!Array.isArray(registros)) return;
@@ -463,20 +475,22 @@ const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => 
   }
 };
 
-const salvarPedidosPostgres    = (pedidos)   => salvarRegistrosPostgres(postgresPedidosTable(),    'numero',     pedidos,   numeroPedido);
-const salvarExpedicaoPostgres  = (expedicao) => salvarRegistrosPostgres(postgresExpedicaoTable(),  'referencia', expedicao, referenciaExpedicao);
-const salvarConcluidosPostgres = (concluidos)=> salvarRegistrosPostgres(postgresConcluidosTable(), 'referencia', concluidos,referenciaExpedicao);
-const salvarAuditoriaPostgres  = (logs)      => salvarRegistrosPostgres(postgresAuditoriaTable(),  'acao',       logs,      acaoAuditoria);
+const salvarPedidosPostgres    = (pedidos)   => salvarRegistrosPostgres(postgresPedidosTable(),    'numero',     pedidos,    numeroPedido);
+const salvarExpedicaoPostgres  = (expedicao) => salvarRegistrosPostgres(postgresExpedicaoTable(),  'referencia', expedicao,  referenciaExpedicao);
+const salvarConcluidosPostgres = (concluidos)=> salvarRegistrosPostgres(postgresConcluidosTable(), 'referencia', concluidos, referenciaExpedicao);
+const salvarAuditoriaPostgres  = (logs)      => salvarRegistrosPostgres(postgresAuditoriaTable(),  'acao',       logs,       acaoAuditoria);
+const salvarKitsPostgres       = (kits)      => salvarRegistrosPostgres(postgresKitsTable(),       'nome',       kits,       nomeKit);
 
 const carregarRegistrosPostgres = async (tbl, orderBy = 'criado_em DESC') => {
   const result = await pool.query(`SELECT dados FROM ${tbl} ORDER BY ${orderBy}`);
   return result.rows.map(row => row.dados);
 };
 
-const carregarPedidosPostgres   = () => carregarRegistrosPostgres(postgresPedidosTable());
-const carregarExpedicaoPostgres = () => carregarRegistrosPostgres(postgresExpedicaoTable());
-const carregarConcluidosPostgres= () => carregarRegistrosPostgres(postgresConcluidosTable());
-const carregarAuditoriaPostgres = () => carregarRegistrosPostgres(postgresAuditoriaTable(), 'criado_em DESC');
+const carregarPedidosPostgres    = () => carregarRegistrosPostgres(postgresPedidosTable());
+const carregarExpedicaoPostgres  = () => carregarRegistrosPostgres(postgresExpedicaoTable());
+const carregarConcluidosPostgres = () => carregarRegistrosPostgres(postgresConcluidosTable());
+const carregarAuditoriaPostgres  = () => carregarRegistrosPostgres(postgresAuditoriaTable(), 'criado_em DESC');
+const carregarKitsPostgres       = () => carregarRegistrosPostgres(postgresKitsTable(), 'nome ASC');
 
 const dividirExpedicao = (expedicao = []) => {
   const lista = Array.isArray(expedicao) ? expedicao : [];
@@ -492,13 +506,16 @@ const salvarAreasPostgres = async (data) => {
   await salvarExpedicaoPostgres(expedicaoAberta);
   await salvarConcluidosPostgres(concluidos);
   await salvarAuditoriaPostgres(data?.logs || []);
+  await salvarKitsPostgres(data?.kits || []);
 };
 
 // ── SALVAR/CARREGAR DADOS (dashboard + áreas) ──
 const saveData = (key, value) => {
   if (USE_POSTGRES) {
+    // Kits, pedidos, expedicao e logs ficam em suas proprias tabelas;
+    // o dashboard armazena apenas metadados (kits, produtos, criadoEm, etc.)
     const valueToStore = key === 'app_data' && value
-      ? { ...value, pedidos: [], expedicao: [], logs: [] }
+      ? { ...value, pedidos: [], expedicao: [], logs: [], kits: [] }
       : value;
     const json = JSON.stringify(valueToStore);
 
@@ -535,15 +552,17 @@ const loadData = (key) => {
         const expedicao  = await carregarExpedicaoPostgres();
         const concluidos = await carregarConcluidosPostgres();
         const logs       = await carregarAuditoriaPostgres();
+        const kits       = await carregarKitsPostgres();
 
-        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length) {
+        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length && !kits.length) {
           return null;
         }
         return {
-          ...(data || { kits: [], produtos: [], criadoEm: new Date().toISOString() }),
+          ...(data || { produtos: [], criadoEm: new Date().toISOString() }),
           pedidos,
           expedicao: [...expedicao, ...concluidos],
-          logs
+          logs,
+          kits
         };
       });
   }
@@ -694,7 +713,7 @@ const startServer = async () => {
       console.log(`✓ Servidor rodando em http://${localIP}:${PORT}`);
       console.log(`✓ URL Local: http://localhost:${PORT}`);
       console.log(`✓ Banco: ${USE_POSTGRES ? `PostgreSQL — schema: ${DB_SCHEMA}` : DB_PATH}`);
-      console.log(`✓ Tabelas: ${DB_SCHEMA}.dashboard | .pedidos | .expedicao | .concluidos | .auditoria | .usuarios`);
+      console.log(`✓ Tabelas: ${DB_SCHEMA}.dashboard | .pedidos | .expedicao | .concluidos | .auditoria | .usuarios | .kits`);
     });
   } catch (err) {
     console.error('Erro ao iniciar servidor:', err);
