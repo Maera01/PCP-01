@@ -10,14 +10,18 @@ const crypto = require('crypto');
 const loadLocalEnv = () => {
   const envPath = path.join(__dirname, '.env');
   if (!fs.existsSync(envPath)) return;
+
   const lines = fs.readFileSync(envPath, 'utf8').split(/\r?\n/);
   for (const line of lines) {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+
     const index = trimmed.indexOf('=');
     const key = trimmed.slice(0, index).trim();
     const value = trimmed.slice(index + 1).trim().replace(/^["']|["']$/g, '');
-    if (key && process.env[key] === undefined) process.env[key] = value;
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
   }
 };
 
@@ -36,42 +40,67 @@ const quoteIdentifier = (value) => {
   return `"${value}"`;
 };
 
-// ── Todas as tabelas ficam dentro do mesmo schema ──
+// ── Todas as tabelas dentro do mesmo schema controle_producao ──
 const schema = () => quoteIdentifier(DB_SCHEMA);
-const table = (name) => `${schema()}."${name}"`;
+const table = (name) => `${schema()}.${quoteIdentifier(name)}`;
 
-const postgresTable         = () => table('app_data');
-const postgresUsuariosTable = () => table('usuarios');
-const postgresPedidosTable  = () => table('pedidos');
-const postgresExpedicaoTable= () => table('expedicao');
-const postgresConcluidosTable=() => table('concluidos');
-const postgresAuditoriaTable= () => table('auditoria');
+const postgresDashboardTable  = () => table('dashboard');
+const postgresPedidosTable    = () => table('pedidos');
+const postgresExpedicaoTable  = () => table('expedicao');
+const postgresConcluidosTable = () => table('concluidos');
+const postgresAuditoriaTable  = () => table('auditoria');
+const postgresUsuariosTable   = () => table('usuarios');
 
 const PERMISSOES = {
   admin: {
     paginas: ['dashboard', 'pedidos', 'expedicao', 'concluidos', 'auditoria', 'usuarios'],
-    criarPedido: true, editarComercial: true, editarAlmoxarifado: true,
-    editarProducao: true, editarExpedicao: true, excluir: true, exportar: true
+    criarPedido: true,
+    editarComercial: true,
+    editarAlmoxarifado: true,
+    editarProducao: true,
+    editarExpedicao: true,
+    excluir: true,
+    exportar: true
   },
   comercial: {
     paginas: ['dashboard', 'pedidos', 'concluidos'],
-    criarPedido: true, editarComercial: true, editarAlmoxarifado: false,
-    editarProducao: false, editarExpedicao: false, excluir: false, exportar: false
+    criarPedido: true,
+    editarComercial: true,
+    editarAlmoxarifado: false,
+    editarProducao: false,
+    editarExpedicao: false,
+    excluir: false,
+    exportar: false
   },
   almoxarifado: {
     paginas: ['dashboard', 'pedidos', 'concluidos'],
-    criarPedido: false, editarComercial: false, editarAlmoxarifado: true,
-    editarProducao: false, editarExpedicao: false, excluir: false, exportar: false
+    criarPedido: false,
+    editarComercial: false,
+    editarAlmoxarifado: true,
+    editarProducao: false,
+    editarExpedicao: false,
+    excluir: false,
+    exportar: false
   },
   producao: {
     paginas: ['dashboard', 'pedidos', 'concluidos'],
-    criarPedido: false, editarComercial: false, editarAlmoxarifado: false,
-    editarProducao: true, editarExpedicao: false, excluir: false, exportar: false
+    criarPedido: false,
+    editarComercial: false,
+    editarAlmoxarifado: false,
+    editarProducao: true,
+    editarExpedicao: false,
+    excluir: false,
+    exportar: false
   },
   expedicao: {
     paginas: ['dashboard', 'expedicao', 'concluidos'],
-    criarPedido: false, editarComercial: false, editarAlmoxarifado: false,
-    editarProducao: false, editarExpedicao: true, excluir: false, exportar: false
+    criarPedido: false,
+    editarComercial: false,
+    editarAlmoxarifado: false,
+    editarProducao: false,
+    editarExpedicao: true,
+    excluir: false,
+    exportar: false
   }
 };
 
@@ -111,11 +140,13 @@ const sanitizeUsuario = (usuario) => ({
     : (usuario.permissoes || {})
 });
 
+// Middlewares
 app.use(cors());
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(bodyParser.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, '..')));
 
+// ── DATABASE INIT ──
 let db;
 let pool;
 
@@ -131,28 +162,35 @@ const initDB = () => {
       ssl: shouldUseSSL ? { rejectUnauthorized: false } : false
     });
 
-    return createTables().then(() => console.log('Conectado ao PostgreSQL'));
+    return createTables().then(() => {
+      console.log('Conectado ao PostgreSQL');
+    });
   }
 
   return new Promise((resolve, reject) => {
     db = new sqlite3.Database(DB_PATH, (err) => {
-      if (err) { console.error('Erro ao abrir DB:', err); reject(err); }
-      else { console.log('Conectado ao SQLite'); createTables().then(resolve).catch(reject); }
+      if (err) {
+        console.error('Erro ao abrir DB:', err);
+        reject(err);
+      } else {
+        console.log('Conectado ao SQLite');
+        createTables().then(resolve).catch(reject);
+      }
     });
   });
 };
 
 const createTables = () => {
   if (USE_POSTGRES) {
-    // ── Cria 1 schema + 6 tabelas dentro dele ──
+    // ── 1 schema, 6 tabelas ──
     return pool.query(`
       CREATE SCHEMA IF NOT EXISTS ${schema()};
 
-      CREATE TABLE IF NOT EXISTS ${postgresTable()} (
-        id         SERIAL PRIMARY KEY,
-        data_key   TEXT UNIQUE NOT NULL,
-        data_value TEXT,
-        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      CREATE TABLE IF NOT EXISTS ${postgresDashboardTable()} (
+        id            SERIAL PRIMARY KEY,
+        data_key      TEXT UNIQUE NOT NULL,
+        data_value    TEXT,
+        updated_at    TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
 
       CREATE TABLE IF NOT EXISTS ${postgresPedidosTable()} (
@@ -202,6 +240,7 @@ const createTables = () => {
     });
   }
 
+  // SQLite
   return new Promise((resolve, reject) => {
     db.serialize(() => {
       db.run(`
@@ -233,6 +272,7 @@ const createTables = () => {
   });
 };
 
+// ── USUARIOS ──
 const seedUsuarios = async () => {
   const count = await contarUsuarios();
   if (count > 0) return;
@@ -248,7 +288,8 @@ const contarUsuarios = async () => {
   }
   return new Promise((resolve, reject) => {
     db.get('SELECT COUNT(*) AS total FROM usuarios', (err, row) => {
-      if (err) reject(err); else resolve(row?.total || 0);
+      if (err) reject(err);
+      else resolve(row?.total || 0);
     });
   });
 };
@@ -262,7 +303,8 @@ const listarUsuarios = async () => {
   }
   return new Promise((resolve, reject) => {
     db.all('SELECT id, nome, login, perfil, permissoes FROM usuarios ORDER BY nome', (err, rows) => {
-      if (err) reject(err); else resolve(rows.map(sanitizeUsuario));
+      if (err) reject(err);
+      else resolve(rows.map(sanitizeUsuario));
     });
   });
 };
@@ -270,13 +312,15 @@ const listarUsuarios = async () => {
 const buscarUsuarioPorLogin = async (login) => {
   if (USE_POSTGRES) {
     const result = await pool.query(
-      `SELECT * FROM ${postgresUsuariosTable()} WHERE login = $1`, [String(login).trim()]
+      `SELECT * FROM ${postgresUsuariosTable()} WHERE login = $1`,
+      [String(login).trim()]
     );
     return result.rows[0] || null;
   }
   return new Promise((resolve, reject) => {
     db.get('SELECT * FROM usuarios WHERE login = ?', [String(login).trim()], (err, row) => {
-      if (err) reject(err); else resolve(row || null);
+      if (err) reject(err);
+      else resolve(row || null);
     });
   });
 };
@@ -321,7 +365,10 @@ const atualizarUsuario = async (id, patch) => {
   if (USE_POSTGRES) {
     const params = [id, nome, login, perfil, JSON.stringify(permissoes)];
     let senhaSql = '';
-    if (senha) { params.push(hashSenha(senha)); senhaSql = `, password_hash = $${params.length}`; }
+    if (senha) {
+      params.push(hashSenha(senha));
+      senhaSql = `, password_hash = $${params.length}`;
+    }
     const result = await pool.query(
       `UPDATE ${postgresUsuariosTable()}
        SET nome = $2, login = $3, perfil = $4, permissoes = $5::jsonb, atualizado_em = CURRENT_TIMESTAMP${senhaSql}
@@ -335,16 +382,20 @@ const atualizarUsuario = async (id, patch) => {
   return new Promise((resolve, reject) => {
     const params = [nome, login, perfil, JSON.stringify(permissoes)];
     let senhaSql = '';
-    if (senha) { params.push(hashSenha(senha)); senhaSql = ', password_hash = ?'; }
+    if (senha) {
+      params.push(hashSenha(senha));
+      senhaSql = ', password_hash = ?';
+    }
     params.push(id);
     db.run(
       `UPDATE usuarios SET nome = ?, login = ?, perfil = ?, permissoes = ?, atualizado_em = CURRENT_TIMESTAMP${senhaSql} WHERE id = ?`,
       params,
-      function (err) {
+      function onUpdate(err) {
         if (err) return reject(err);
         if (this.changes === 0) return resolve(null);
         db.get('SELECT id, nome, login, perfil, permissoes FROM usuarios WHERE id = ?', [id], (getErr, row) => {
-          if (getErr) reject(getErr); else resolve(row ? sanitizeUsuario(row) : null);
+          if (getErr) reject(getErr);
+          else resolve(row ? sanitizeUsuario(row) : null);
         });
       }
     );
@@ -357,41 +408,52 @@ const removerUsuario = async (id) => {
     return result.rowCount > 0;
   }
   return new Promise((resolve, reject) => {
-    db.run('DELETE FROM usuarios WHERE id = ?', [id], function (err) {
-      if (err) reject(err); else resolve(this.changes > 0);
+    db.run('DELETE FROM usuarios WHERE id = ?', [id], function onDelete(err) {
+      if (err) reject(err);
+      else resolve(this.changes > 0);
     });
   });
 };
 
-// ── Helpers de label ──
-const numeroPedido     = (p) => String(p?.numero || p?.numeroOP || p?.serie || p?.id || '').trim();
-const referenciaItem   = (i) => String(i?.equipamento || i?.serie || i?.id || '').trim();
-const acaoAuditoria    = (l) => String(l?.action || l?.id || '').trim();
+// ── HELPERS DE LABEL ──
+const numeroPedido = (pedido) =>
+  String(pedido?.numero || pedido?.numeroOP || pedido?.serie || pedido?.id || '').trim();
 
+const referenciaExpedicao = (item) =>
+  String(item?.equipamento || item?.serie || item?.id || '').trim();
+
+const acaoAuditoria = (log) =>
+  String(log?.action || log?.id || '').trim();
+
+// ── SALVAR/CARREGAR REGISTROS (PostgreSQL) ──
 const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => {
   if (!Array.isArray(registros)) return;
+
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const ids = [];
-    for (const reg of registros) {
-      if (!reg?.id) continue;
-      ids.push(String(reg.id));
+
+    for (const registro of registros) {
+      if (!registro?.id) continue;
+      ids.push(String(registro.id));
       await client.query(
-        `INSERT INTO ${tbl} (id, "${labelColumn}", dados, criado_em, atualizado_em)
+        `INSERT INTO ${tbl} (id, ${quoteIdentifier(labelColumn)}, dados, criado_em, atualizado_em)
          VALUES ($1, $2, $3::jsonb, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
          ON CONFLICT (id) DO UPDATE SET
-           "${labelColumn}" = EXCLUDED."${labelColumn}",
+           ${quoteIdentifier(labelColumn)} = EXCLUDED.${quoteIdentifier(labelColumn)},
            dados = EXCLUDED.dados,
            atualizado_em = CURRENT_TIMESTAMP`,
-        [String(reg.id), labelFn(reg), JSON.stringify(reg)]
+        [String(registro.id), labelFn(registro), JSON.stringify(registro)]
       );
     }
+
     if (ids.length) {
       await client.query(`DELETE FROM ${tbl} WHERE NOT (id = ANY($1::text[]))`, [ids]);
     } else {
       await client.query(`DELETE FROM ${tbl}`);
     }
+
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');
@@ -401,25 +463,28 @@ const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => 
   }
 };
 
-const salvarPedidosPostgres   = (r) => salvarRegistrosPostgres(postgresPedidosTable(),   'numero',    r, numeroPedido);
-const salvarExpedicaoPostgres  = (r) => salvarRegistrosPostgres(postgresExpedicaoTable(), 'referencia',r, referenciaItem);
-const salvarConcluidosPostgres = (r) => salvarRegistrosPostgres(postgresConcluidosTable(),'referencia',r, referenciaItem);
-const salvarAuditoriaPostgres  = (r) => salvarRegistrosPostgres(postgresAuditoriaTable(), 'acao',      r, acaoAuditoria);
+const salvarPedidosPostgres    = (pedidos)   => salvarRegistrosPostgres(postgresPedidosTable(),    'numero',     pedidos,   numeroPedido);
+const salvarExpedicaoPostgres  = (expedicao) => salvarRegistrosPostgres(postgresExpedicaoTable(),  'referencia', expedicao, referenciaExpedicao);
+const salvarConcluidosPostgres = (concluidos)=> salvarRegistrosPostgres(postgresConcluidosTable(), 'referencia', concluidos,referenciaExpedicao);
+const salvarAuditoriaPostgres  = (logs)      => salvarRegistrosPostgres(postgresAuditoriaTable(),  'acao',       logs,      acaoAuditoria);
 
-const carregarRegistrosPostgres = async (tbl, order = 'criado_em DESC') => {
-  const result = await pool.query(`SELECT dados FROM ${tbl} ORDER BY ${order}`);
+const carregarRegistrosPostgres = async (tbl, orderBy = 'criado_em DESC') => {
+  const result = await pool.query(`SELECT dados FROM ${tbl} ORDER BY ${orderBy}`);
   return result.rows.map(row => row.dados);
 };
 
 const carregarPedidosPostgres   = () => carregarRegistrosPostgres(postgresPedidosTable());
-const carregarExpedicaoPostgres  = () => carregarRegistrosPostgres(postgresExpedicaoTable());
-const carregarConcluidosPostgres = () => carregarRegistrosPostgres(postgresConcluidosTable());
-const carregarAuditoriaPostgres  = () => carregarRegistrosPostgres(postgresAuditoriaTable());
+const carregarExpedicaoPostgres = () => carregarRegistrosPostgres(postgresExpedicaoTable());
+const carregarConcluidosPostgres= () => carregarRegistrosPostgres(postgresConcluidosTable());
+const carregarAuditoriaPostgres = () => carregarRegistrosPostgres(postgresAuditoriaTable(), 'criado_em DESC');
 
-const dividirExpedicao = (expedicao = []) => ({
-  expedicaoAberta: expedicao.filter(i => i.statusConferencia !== 'Aceito'),
-  concluidos:      expedicao.filter(i => i.statusConferencia === 'Aceito')
-});
+const dividirExpedicao = (expedicao = []) => {
+  const lista = Array.isArray(expedicao) ? expedicao : [];
+  return {
+    expedicaoAberta: lista.filter(item => item.statusConferencia !== 'Aceito'),
+    concluidos:      lista.filter(item => item.statusConferencia === 'Aceito')
+  };
+};
 
 const salvarAreasPostgres = async (data) => {
   const { expedicaoAberta, concluidos } = dividirExpedicao(data?.expedicao || []);
@@ -429,25 +494,29 @@ const salvarAreasPostgres = async (data) => {
   await salvarAuditoriaPostgres(data?.logs || []);
 };
 
+// ── SALVAR/CARREGAR DADOS (dashboard + áreas) ──
 const saveData = (key, value) => {
   if (USE_POSTGRES) {
     const valueToStore = key === 'app_data' && value
       ? { ...value, pedidos: [], expedicao: [], logs: [] }
       : value;
+    const json = JSON.stringify(valueToStore);
+
     return pool.query(
-      `INSERT INTO ${postgresTable()} (data_key, data_value, updated_at)
+      `INSERT INTO ${postgresDashboardTable()} (data_key, data_value, updated_at)
        VALUES ($1, $2, CURRENT_TIMESTAMP)
        ON CONFLICT (data_key) DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
-      [key, JSON.stringify(valueToStore)]
+      [key, json]
     ).then(async () => {
       if (key === 'app_data') await salvarAreasPostgres(value || {});
     });
   }
 
   return new Promise((resolve, reject) => {
+    const json = JSON.stringify(value);
     db.run(
       `INSERT OR REPLACE INTO app_data (data_key, data_value, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
-      [key, JSON.stringify(value)],
+      [key, json],
       (err) => err ? reject(err) : resolve()
     );
   });
@@ -455,19 +524,21 @@ const saveData = (key, value) => {
 
 const loadData = (key) => {
   if (USE_POSTGRES) {
-    return pool.query(`SELECT data_value FROM ${postgresTable()} WHERE data_key = $1`, [key])
+    return pool
+      .query(`SELECT data_value FROM ${postgresDashboardTable()} WHERE data_key = $1`, [key])
       .then(async result => {
         const value = result.rows[0]?.data_value;
         const data = value ? JSON.parse(value) : null;
         if (key !== 'app_data') return data;
 
-        const pedidos   = await carregarPedidosPostgres();
-        const expedicao = await carregarExpedicaoPostgres();
-        const concluidos= await carregarConcluidosPostgres();
-        const logs      = await carregarAuditoriaPostgres();
+        const pedidos    = await carregarPedidosPostgres();
+        const expedicao  = await carregarExpedicaoPostgres();
+        const concluidos = await carregarConcluidosPostgres();
+        const logs       = await carregarAuditoriaPostgres();
 
-        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length) return null;
-
+        if (!data && !pedidos.length && !expedicao.length && !concluidos.length && !logs.length) {
+          return null;
+        }
         return {
           ...(data || { kits: [], produtos: [], criadoEm: new Date().toISOString() }),
           pedidos,
@@ -478,20 +549,29 @@ const loadData = (key) => {
   }
 
   return new Promise((resolve, reject) => {
-    db.get(`SELECT data_value FROM app_data WHERE data_key = ?`, [key], (err, row) => {
-      if (err) reject(err); else resolve(row ? JSON.parse(row.data_value) : null);
-    });
+    db.get(
+      `SELECT data_value FROM app_data WHERE data_key = ?`,
+      [key],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row ? JSON.parse(row.data_value) : null);
+      }
+    );
   });
 };
 
 // ── ROUTES ──
+
 app.get('/api/data', async (req, res) => {
   try {
     const data = await loadData('app_data') || {
-      pedidos: [], expedicao: [], kits: [], logs: [], criadoEm: new Date().toISOString()
+      pedidos: [], expedicao: [], kits: [], logs: [],
+      criadoEm: new Date().toISOString()
     };
     res.json({ success: true, data });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post('/api/data', async (req, res) => {
@@ -500,41 +580,56 @@ app.post('/api/data', async (req, res) => {
     if (!data) return res.status(400).json({ success: false, error: 'data is required' });
     await saveData('app_data', data);
     res.json({ success: true, message: 'Dados salvos com sucesso' });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-app.get('/api/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
 
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { login, senha } = req.body || {};
     const usuario = await buscarUsuarioPorLogin(login);
-    if (!usuario || !validarSenha(senha, usuario.password_hash))
+    if (!usuario || !validarSenha(senha, usuario.password_hash)) {
       return res.status(401).json({ success: false, error: 'Usuario ou senha invalidos' });
+    }
     res.json({ success: true, user: sanitizeUsuario(usuario) });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post('/api/auth/validate', async (req, res) => {
   try {
     const { login, senha } = req.body || {};
     const usuario = await buscarUsuarioPorLogin(login);
-    if (!usuario || !validarSenha(senha, usuario.password_hash))
+    if (!usuario || !validarSenha(senha, usuario.password_hash)) {
       return res.status(401).json({ success: false, error: 'Credenciais invalidas' });
+    }
     res.json({ success: true, user: sanitizeUsuario(usuario) });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.get('/api/users', async (req, res) => {
-  try { res.json({ success: true, users: await listarUsuarios() }); }
-  catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  try {
+    const users = await listarUsuarios();
+    res.json({ success: true, users });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post('/api/users', async (req, res) => {
   try {
     const { nome, login, senha, perfil, permissoes } = req.body || {};
-    if (!nome || !login || !senha)
+    if (!nome || !login || !senha) {
       return res.status(400).json({ success: false, error: 'nome, login e senha sao obrigatorios' });
+    }
     const user = await inserirUsuario({ nome, login, senha, perfil, permissoes });
     res.status(201).json({ success: true, user });
   } catch (err) {
@@ -546,8 +641,9 @@ app.post('/api/users', async (req, res) => {
 app.put('/api/users/:id', async (req, res) => {
   try {
     const { nome, login, perfil, permissoes, senha } = req.body || {};
-    if (!nome || !login)
+    if (!nome || !login) {
       return res.status(400).json({ success: false, error: 'nome e login sao obrigatorios' });
+    }
     const user = await atualizarUsuario(req.params.id, { nome, login, perfil, permissoes, senha });
     if (!user) return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
     res.json({ success: true, user });
@@ -562,19 +658,24 @@ app.delete('/api/users/:id', async (req, res) => {
     const removed = await removerUsuario(req.params.id);
     if (!removed) return res.status(404).json({ success: false, error: 'Usuario nao encontrado' });
     res.json({ success: true });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post('/api/backup', async (req, res) => {
   try {
     const data = await loadData('app_data');
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').split('T')[0];
-    await saveData(`app_data_backup_${timestamp}`, data);
-    res.json({ success: true, message: 'Backup criado' });
-  } catch (err) { res.status(500).json({ success: false, error: err.message }); }
+    const backupKey = `app_data_backup_${timestamp}`;
+    await saveData(backupKey, data);
+    res.json({ success: true, message: 'Backup criado', backupKey });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
 });
 
-// ── START ──
+// ── START SERVER ──
 const startServer = async () => {
   try {
     await initDB();
@@ -584,16 +685,21 @@ const startServer = async () => {
       let localIP = 'localhost';
       for (const name of Object.keys(interfaces)) {
         for (const iface of interfaces[name]) {
-          if (iface.family === 'IPv4' && !iface.internal) { localIP = iface.address; break; }
+          if (iface.family === 'IPv4' && !iface.internal) {
+            localIP = iface.address;
+            break;
+          }
         }
       }
       console.log(`✓ Servidor rodando em http://${localIP}:${PORT}`);
       console.log(`✓ URL Local: http://localhost:${PORT}`);
-      console.log(`✓ Banco: ${USE_POSTGRES ? `PostgreSQL schema "${DB_SCHEMA}"` : DB_PATH}`);
-      console.log(`✓ Tabelas: app_data | pedidos | expedicao | concluidos | auditoria | usuarios`);
+      console.log(`✓ Banco: ${USE_POSTGRES ? `PostgreSQL — schema: ${DB_SCHEMA}` : DB_PATH}`);
+      console.log(`✓ Tabelas: ${DB_SCHEMA}.dashboard | .pedidos | .expedicao | .concluidos | .auditoria | .usuarios`);
     });
   } catch (err) {
     console.error('Erro ao iniciar servidor:', err);
     process.exit(1);
   }
 };
+
+startServer();
