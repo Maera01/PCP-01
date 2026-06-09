@@ -104,6 +104,20 @@ function findUsuarioByLogin(login) {
   return loadUsuarios().find(u => u.login === String(login).trim());
 }
 
+function findUsuarioPadraoByLogin(login) {
+  return defaultUsuarios().find(u => u.login === String(login).trim());
+}
+
+function validarUsuarioLocal(login, senha) {
+  const user = findUsuarioByLogin(login);
+  if (user?.senha === senha) return user;
+
+  const padrao = findUsuarioPadraoByLogin(login);
+  if (padrao?.senha === senha) return padrao;
+
+  return null;
+}
+
 function findUsuarioById(id) {
   return loadUsuarios().find(u => u.id === id);
 }
@@ -121,7 +135,9 @@ const Auth = {
       });
       user = json.user;
     } catch (err) {
-      return false;
+      const local = validarUsuarioLocal(loginVal, senhaVal);
+      if (!local) return false;
+      user = local;
     }
     localStorage.setItem(this._key, JSON.stringify({
       id:        user.id,
@@ -185,7 +201,7 @@ const Auth = {
       });
       return json.user || null;
     } catch (err) {
-      return null;
+      return validarUsuarioLocal(loginVal, senhaVal);
     }
   },
 
