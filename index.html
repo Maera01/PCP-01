@@ -4,202 +4,238 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
   <link rel="icon" href="favicon.ico" sizes="any">
-  <title>Controle de Produção — Login</title>
-  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-  <!-- ✅ style.css na raiz -->
+  <title>Controle de Producao - Login</title>
   <link rel="stylesheet" href="style.css">
   <style>
-    html, body {
+    html,
+    body {
       height: 100%;
+      min-height: 100%;
       overflow: hidden;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: var(--bg);
+      background: #f3f4f6;
+    }
+
+    body {
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: #0f172a;
+      font-family: Arial, Helvetica, sans-serif;
     }
 
     .login-wrap {
       width: 100%;
-      max-width: 400px;
-      padding: 20px;
+      max-width: 488px;
     }
 
     .login-box {
-      background: var(--bg-2);
-      border: 1px solid var(--border-light);
-      border-radius: 10px;
-      padding: 40px 36px;
+      background: #ffffff;
+      border: 1px solid #dde1e8;
+      border-radius: 11px;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
       display: flex;
       flex-direction: column;
-      gap: 28px;
+      gap: 24px;
+      padding: 38px 34px 36px;
     }
 
     .login-logo {
-      text-align: center;
+      align-items: center;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      gap: 8px;
+      gap: 22px;
+      text-align: center;
     }
 
     .login-logo .maera-logo {
-      width: min(210px, 100%);
+      filter: none;
+      width: min(228px, 74%);
     }
 
-    .login-logo-sub {
-      font-family: var(--font-mono);
-      font-size: 9px;
-      letter-spacing: 3px;
-      color: var(--text-muted);
-      text-transform: uppercase;
+    .login-heading {
+      display: grid;
+      gap: 4px;
+      text-align: center;
     }
 
-    .login-divider {
-      height: 1px;
-      background: var(--border);
+    .login-heading h1 {
+      color: #07142b;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: 0;
+      line-height: 1.15;
+      margin: 0;
+    }
+
+    .login-heading p {
+      color: #697386;
+      font-size: 18px;
+      line-height: 1.35;
+      margin: 0;
     }
 
     .login-form {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 4px;
+    }
+
+    .login-form .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
     }
 
     .login-form .form-group label {
-      font-size: 10px;
-      letter-spacing: 1.5px;
+      color: #526882;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 0.6px;
+      line-height: 1;
+      margin-bottom: 7px;
       text-transform: uppercase;
-      color: var(--text-muted);
-      font-family: var(--font-mono);
-      margin-bottom: 6px;
-      display: block;
     }
 
     .login-form .input {
+      background: #ffffff;
+      border: 1px solid #9aa9bd;
+      border-radius: 8px;
+      color: #1f2937;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 17px;
+      height: 45px;
+      outline: none;
+      padding: 0 16px;
+      transition: border-color 0.15s, box-shadow 0.15s;
       width: 100%;
-      font-size: 14px;
-      padding: 10px 14px;
+    }
+
+    .login-form .input::placeholder {
+      color: #6b7280;
+    }
+
+    .login-form .input:focus {
+      border-color: #f23b0a;
+      box-shadow: 0 0 0 3px rgba(242, 59, 10, 0.14);
     }
 
     .login-btn {
-      width: 100%;
+      align-items: center;
+      background: #f23b0a;
+      border-radius: 9px;
+      color: #ffffff;
+      display: inline-flex;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 16px;
+      font-weight: 700;
+      gap: 8px;
+      height: 47px;
       justify-content: center;
-      padding: 11px;
-      font-size: 14px;
-      letter-spacing: 1px;
-      margin-top: 4px;
+      margin-top: 17px;
+      padding: 0 16px;
+      width: 100%;
+    }
+
+    .login-btn:hover {
+      background: #ef3a09;
+      box-shadow: 0 8px 18px rgba(242, 59, 10, 0.18);
+    }
+
+    .login-btn svg {
+      flex: 0 0 auto;
+      height: 20px;
+      width: 20px;
     }
 
     .login-error {
-      background: var(--danger-dim);
-      border: 1px solid var(--danger);
-      border-radius: var(--radius);
-      padding: 10px 14px;
-      font-size: 11px;
-      color: var(--danger);
-      font-family: var(--font-mono);
-      letter-spacing: 0.5px;
+      background: #fff1ed;
+      border: 1px solid #f23b0a;
+      border-radius: 8px;
+      color: #c22f08;
       display: none;
+      font-family: Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      margin-top: 12px;
+      padding: 10px 14px;
       text-align: center;
     }
 
-    .login-error.show { display: block; }
-
-    .login-footer {
-      text-align: center;
-      font-family: var(--font-mono);
-      font-size: 9px;
-      letter-spacing: 2px;
-      color: var(--text-muted);
-      text-transform: uppercase;
-      opacity: 0.6;
-    }
-
-    .login-hint {
-      background: var(--bg-3);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      padding: 12px 14px;
-      font-family: var(--font-mono);
-      font-size: 10px;
-      color: var(--text-muted);
-      line-height: 1.8;
-    }
-
-    .login-hint strong {
-      color: var(--accent);
+    .login-error.show {
       display: block;
-      margin-bottom: 4px;
-      letter-spacing: 1px;
     }
 
-    .login-hint span {
-      display: flex;
-      justify-content: space-between;
-      padding: 1px 0;
-      border-bottom: 1px solid var(--border);
-    }
+    @media (max-width: 560px) {
+      body {
+        padding: 16px;
+      }
 
-    .login-hint span:last-child { border-bottom: none; }
-    .login-hint .u { color: var(--text); }
-    .login-hint .p { color: var(--warning); }
+      .login-box {
+        padding: 32px 24px;
+      }
+
+      .login-heading h1 {
+        font-size: 24px;
+      }
+
+      .login-heading p {
+        font-size: 16px;
+      }
+    }
   </style>
 </head>
 <body>
 
 <div class="login-wrap">
   <div class="login-box">
-
-    <!-- LOGO -->
     <div class="login-logo">
       <img class="maera-logo" src="logo.png" alt="Maera">
-      <span class="login-logo-sub">Controle de Produção</span>
+      <div class="login-heading">
+        <h1>Acesso restrito</h1>
+        <p>Entre com seu login de vendedor.</p>
+      </div>
     </div>
 
-    <div class="login-divider"></div>
-
-    <!-- FORMULÁRIO -->
     <form class="login-form" onsubmit="fazerLogin(event)" autocomplete="off">
       <div class="form-group">
-        <label>Usuário</label>
+        <label>Login</label>
         <input class="input" type="text" id="login-user"
-          placeholder="Digite seu usuário" required/>
+          placeholder="Ex: lucas.carvalho" required/>
       </div>
+
       <div class="form-group">
         <label>Senha</label>
         <input class="input" type="password" id="login-senha"
-          placeholder="Digite sua senha" required/>
+          placeholder="Digite a senha" required/>
       </div>
 
       <div class="login-error" id="login-erro">
-        ✕ Usuário ou senha incorretos.
+        Usuario ou senha incorretos.
       </div>
 
       <button type="submit" class="btn btn-primary login-btn">
-        Entrar →
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
+          <path d="M7 11V8a5 5 0 0 1 9.2-2.7" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
+          <path d="M6.8 11h10.4c1 0 1.8.8 1.8 1.8v5.4c0 1-.8 1.8-1.8 1.8H6.8c-1 0-1.8-.8-1.8-1.8v-5.4c0-1 .8-1.8 1.8-1.8Z" fill="currentColor"/>
+        </svg>
+        Entrar
       </button>
     </form>
-
-    <div class="login-footer">Sistema Interno — Acesso Restrito</div>
-
   </div>
 </div>
 
-<!-- ✅ auth.js está em js/ -->
 <script src="js/api.js"></script>
 <script src="js/auth.js"></script>
 <script>
-  // ✅ app.html está na raiz, mesmo nível do index.html
   if (Auth.getSessao()) window.location.href = 'app.html';
 
   async function fazerLogin(ev) {
     ev.preventDefault();
-    const user  = document.getElementById('login-user').value;
+    const user = document.getElementById('login-user').value;
     const senha = document.getElementById('login-senha').value;
-    const erro  = document.getElementById('login-erro');
+    const erro = document.getElementById('login-erro');
 
     if (await Auth.login(user, senha)) {
-      // ✅ app.html na raiz
       window.location.href = 'app.html';
     } else {
       erro.classList.add('show');
