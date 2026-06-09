@@ -38,7 +38,8 @@ function etapaVazia() {
     tipoConferencia: '',
     problemaSaida: '',
     problemaDescricao: '',
-    problemaRetorno: ''
+    problemaRetorno: '',
+    tecnico: ''
   };
 }
 // Kits iniciais (exemplos)
@@ -574,6 +575,7 @@ const App = {
     const etapasHtml = Object.entries(p.etapas || {}).map(([k, e]) => `
       <div class="etapa-card">
         <div class="etapa-nome">${ET_NOMES[k] || k}</div>
+        ${e.tecnico ? `<div class="etapa-row"><span>Responsável</span><span>${escapar(e.tecnico)}</span></div>` : ''}
         <div class="etapa-row"><span>Início</span><span>${fmtData(e.inicio)}</span></div>
         ${k === 'conferencia' ? `
           <div class="etapa-row"><span>Entrega Almox.</span><span>${escapar(e.tipoConferencia)||'—'}</span></div>` : ''}
@@ -690,6 +692,7 @@ const App = {
     if (form) {
       const podeProd = typeof Auth === 'undefined' || Auth.pode('editarProducao');
       const dis = podeProd ? '' : 'disabled';
+      const tecnicoAtual = typeof Auth !== 'undefined' ? Auth.getNome() : '';
       form.innerHTML = ET_KEYS.map(key => {
         const e = { ...etapaVazia(), ...(p.etapas?.[key] || {}) };
         const ops = key === 'conferencia'
@@ -742,6 +745,10 @@ const App = {
         return `
           <div class="etapa-edit-block">
             <h4>${titulo}</h4>
+            <div class="form-group">
+              <label>Responsável</label>
+              <input class="input" type="text" value="${escapar(e.tecnico)}" disabled />
+            </div>
             <div class="etapa-edit-row">
               ${key === 'conferencia' ? '' : `
               <div class="form-group">
@@ -910,19 +917,36 @@ const App = {
     if (podeProd) {
       if (!this.validarProducao()) return;
       if (!p.etapas) p.etapas = {};
+      const tecnicoAtual = typeof Auth !== 'undefined' ? Auth.getNome() : '';
       ET_KEYS.forEach(key => {
+        const atual = p.etapas[key] || {};
+        const inicio = gv(`ete-${key}-ini`);
+        const problema = gv(`ete-${key}-prob`);
+        const fim = gv(`ete-${key}-fim`);
+        const tipoConferencia = key === 'conferencia' ? gv(`ete-${key}-tipo`) : '';
+        const problemaSaida = key !== 'conferencia' ? gv(`ete-${key}-prob-saida`) : '';
+        const problemaRetorno = key !== 'conferencia' ? gv(`ete-${key}-prob-retorno`) : '';
+        const problemaDescricao = (key === 'conferencia')
+          ? gv(`ete-${key}-prob-desc`).trim()
+          : (!['', 'Não', 'NaN'].includes(problema) ? gv(`ete-${key}-prob-desc`).trim() : '');
+        const recebimentoParcial = key === 'conferencia' ? gv(`ete-${key}-recebimento-parcial`) : '';
+        const recebimentoTotal = key === 'conferencia' ? gv(`ete-${key}-recebimento-total`) : '';
+        const novoTecnico = atual.tecnico || (
+          key === 'conferencia'
+            ? ((recebimentoParcial || recebimentoTotal) && !atual.recebimentoParcial && !atual.recebimentoTotal ? tecnicoAtual : '')
+            : (fim && !atual.fim ? tecnicoAtual : '')
+        );
         p.etapas[key] = {
-          inicio:   gv(`ete-${key}-ini`),
-          problema: gv(`ete-${key}-prob`),
-          fim:      gv(`ete-${key}-fim`),
-          tipoConferencia: key === 'conferencia' ? gv(`ete-${key}-tipo`) : '',
-          problemaSaida: key !== 'conferencia' ? gv(`ete-${key}-prob-saida`) : '',
-          problemaDescricao: (key === 'conferencia')
-            ? gv(`ete-${key}-prob-desc`).trim()
-            : (!['', 'Não', 'NaN'].includes(gv(`ete-${key}-prob`)) ? gv(`ete-${key}-prob-desc`).trim() : ''),
-          problemaRetorno: key !== 'conferencia' ? gv(`ete-${key}-prob-retorno`) : '',
-          recebimentoParcial: key === 'conferencia' ? gv(`ete-${key}-recebimento-parcial`) : '',
-          recebimentoTotal: key === 'conferencia' ? gv(`ete-${key}-recebimento-total`) : ''
+          inicio,
+          problema,
+          fim,
+          tipoConferencia,
+          problemaSaida,
+          problemaDescricao,
+          problemaRetorno,
+          recebimentoParcial,
+          recebimentoTotal,
+          tecnico: novoTecnico
         };
       });
     }
