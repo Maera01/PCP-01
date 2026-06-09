@@ -6,6 +6,14 @@
 
 const USUARIOS_KEY = 'cp_usuarios';
 
+const DEFAULT_USUARIOS = [
+  { id:'u001', nome:'Admin Geral',    login:'admin',        senha:'admin123',  perfil:'admin'        },
+  { id:'u002', nome:'Comercial',      login:'comercial',    senha:'com123',    perfil:'comercial'    },
+  { id:'u003', nome:'Almoxarifado',   login:'almoxarifado', senha:'alm123',    perfil:'almoxarifado' },
+  { id:'u004', nome:'Producao',       login:'producao',     senha:'prod123',   perfil:'producao'     },
+  { id:'u005', nome:'Expedicao',      login:'expedicao',    senha:'exp123',    perfil:'expedicao'    }
+];
+
 const PERMISSOES = {
   admin: {
     paginas:            ['dashboard','pedidos','expedicao','concluidos','auditoria','usuarios'],
@@ -63,10 +71,36 @@ function novoIdUsuario() {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 }
 
+function defaultUsuarios() {
+  return DEFAULT_USUARIOS.map(u => ({
+    ...u,
+    permissoes: PERMISSOES[u.perfil] || {}
+  }));
+}
+
+function normalizarPermissoes(permissoes) {
+  const normalizadas = { ...(permissoes || {}) };
+  if (typeof normalizadas.paginas === 'string') {
+    normalizadas.paginas = normalizadas.paginas
+      .split(/[,\s]+/)
+      .map(page => page.trim())
+      .filter(Boolean);
+  }
+  return normalizadas;
+}
+
+function normalizarUsuario(usuario) {
+  if (!usuario) return null;
+  return {
+    ...usuario,
+    permissoes: normalizarPermissoes(usuario.permissoes || PERMISSOES[usuario.perfil] || {})
+  };
+}
+
 function loadUsuarios() {
   try {
     const raw = localStorage.getItem(USUARIOS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) return JSON.parse(raw).map(normalizarUsuario);
   } catch(e) {}
   const usuarios = defaultUsuarios();
   localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
@@ -133,7 +167,7 @@ const Auth = {
         method: 'POST',
         body: JSON.stringify({ login: loginVal, senha: senhaVal })
       });
-      user = json.user;
+      user = normalizarUsuario(json.user);
     } catch (err) {
       const local = validarUsuarioLocal(loginVal, senhaVal);
       if (!local) return false;
@@ -184,7 +218,7 @@ const Auth = {
   async carregarUsuarios() {
     try {
       const json = await requestAuth('/users');
-      this._usuariosCache = json.users || [];
+      this._usuariosCache = (json.users || []).map(normalizarUsuario);
       saveUsuarios(this._usuariosCache);
       return this._usuariosCache;
     } catch (err) {
@@ -199,7 +233,7 @@ const Auth = {
         method: 'POST',
         body: JSON.stringify({ login: loginVal, senha: senhaVal })
       });
-      return json.user || null;
+      return normalizarUsuario(json.user);
     } catch (err) {
       return validarUsuarioLocal(loginVal, senhaVal);
     }
@@ -213,7 +247,7 @@ const Auth = {
         body: JSON.stringify(data)
       });
       await this.carregarUsuarios();
-      return json.user || null;
+      return normalizarUsuario(json.user);
     } catch (err) {
       return null;
     }
@@ -226,7 +260,7 @@ const Auth = {
         body: JSON.stringify(patch)
       });
       await this.carregarUsuarios();
-      return json.user || null;
+      return normalizarUsuario(json.user);
     } catch (err) {
       return null;
     }
