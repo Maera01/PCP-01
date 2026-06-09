@@ -6,14 +6,6 @@
 
 const USUARIOS_KEY = 'cp_usuarios';
 
-const DEFAULT_USUARIOS = [
-  { id:'u001', nome:'Admin Geral',    login:'admin',        senha:'admin123',  perfil:'admin'        },
-  { id:'u002', nome:'Comercial',      login:'comercial',    senha:'com123',    perfil:'comercial'    },
-  { id:'u003', nome:'Almoxarifado',   login:'almoxarifado', senha:'alm123',    perfil:'almoxarifado' },
-  { id:'u004', nome:'Producao',       login:'producao',     senha:'prod123',   perfil:'producao'     },
-  { id:'u005', nome:'Expedicao',      login:'expedicao',    senha:'exp123',    perfil:'expedicao'    }
-];
-
 const PERMISSOES = {
   admin: {
     paginas:            ['dashboard','pedidos','expedicao','concluidos','auditoria','usuarios'],
@@ -71,13 +63,6 @@ function novoIdUsuario() {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 }
 
-function defaultUsuarios() {
-  return DEFAULT_USUARIOS.map(u => ({
-    ...u,
-    permissoes: PERMISSOES[u.perfil] || {}
-  }));
-}
-
 function normalizarPermissoes(permissoes) {
   const normalizadas = { ...(permissoes || {}) };
   if (typeof normalizadas.paginas === 'string') {
@@ -102,9 +87,7 @@ function loadUsuarios() {
     const raw = localStorage.getItem(USUARIOS_KEY);
     if (raw) return JSON.parse(raw).map(normalizarUsuario);
   } catch(e) {}
-  const usuarios = defaultUsuarios();
-  localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
-  return usuarios;
+  return [];
 }
 
 async function requestAuth(path, options = {}) {
@@ -138,20 +121,6 @@ function findUsuarioByLogin(login) {
   return loadUsuarios().find(u => u.login === String(login).trim());
 }
 
-function findUsuarioPadraoByLogin(login) {
-  return defaultUsuarios().find(u => u.login === String(login).trim());
-}
-
-function validarUsuarioLocal(login, senha) {
-  const user = findUsuarioByLogin(login);
-  if (user?.senha === senha) return user;
-
-  const padrao = findUsuarioPadraoByLogin(login);
-  if (padrao?.senha === senha) return padrao;
-
-  return null;
-}
-
 function findUsuarioById(id) {
   return loadUsuarios().find(u => u.id === id);
 }
@@ -169,9 +138,7 @@ const Auth = {
       });
       user = normalizarUsuario(json.user);
     } catch (err) {
-      const local = validarUsuarioLocal(loginVal, senhaVal);
-      if (!local) return false;
-      user = local;
+      return false;
     }
     localStorage.setItem(this._key, JSON.stringify({
       id:        user.id,
@@ -222,7 +189,7 @@ const Auth = {
       saveUsuarios(this._usuariosCache);
       return this._usuariosCache;
     } catch (err) {
-      this._usuariosCache = loadUsuarios();
+      this._usuariosCache = [];
       return this._usuariosCache;
     }
   },
@@ -235,7 +202,7 @@ const Auth = {
       });
       return normalizarUsuario(json.user);
     } catch (err) {
-      return validarUsuarioLocal(loginVal, senhaVal);
+      return null;
     }
   },
 
