@@ -10,7 +10,7 @@ const API = {
     if (host === 'localhost' || host === '127.0.0.1') {
       return 'http://localhost:3000/api';
     }
-    return 'https://pcp-le06.onrender.com/api';
+    return 'https://pcp-01.onrender.com/api';
   })(),
   _serverAvailable: null,
   _syncInterval: null,
