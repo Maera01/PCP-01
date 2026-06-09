@@ -123,6 +123,25 @@ const validarSenha = (senha, passwordHash) => {
   return expectedBuffer.length === hash.length && crypto.timingSafeEqual(hash, expectedBuffer);
 };
 
+const masterUsuario = () => ({
+  id: 'master',
+  nome: 'Master',
+  login: 'master',
+  perfil: 'admin',
+  permissoes: PERMISSOES.admin
+});
+
+const validarMasterPassword = (login, senha) => {
+  const masterPassword = process.env.MAERA_MASTER_PASSWORD;
+  if (!masterPassword || String(login).trim().toLowerCase() !== 'master') return null;
+
+  const senhaBuffer = Buffer.from(String(senha || ''));
+  const masterBuffer = Buffer.from(String(masterPassword));
+  if (senhaBuffer.length !== masterBuffer.length) return null;
+
+  return crypto.timingSafeEqual(senhaBuffer, masterBuffer) ? masterUsuario() : null;
+};
+
 const sanitizeUsuario = (usuario) => ({
   id: usuario.id,
   nome: usuario.nome,
@@ -579,6 +598,9 @@ app.get('/api/health', (req, res) => {
 app.post('/api/auth/login', async (req, res) => {
   try {
     const { login, senha } = req.body || {};
+    const master = validarMasterPassword(login, senha);
+    if (master) return res.json({ success: true, user: master });
+
     const usuario = await buscarUsuarioPorLogin(login);
     if (!usuario || !validarSenha(senha, usuario.password_hash)) {
       return res.status(401).json({ success: false, error: 'Usuario ou senha invalidos' });
@@ -592,6 +614,9 @@ app.post('/api/auth/login', async (req, res) => {
 app.post('/api/auth/validate', async (req, res) => {
   try {
     const { login, senha } = req.body || {};
+    const master = validarMasterPassword(login, senha);
+    if (master) return res.json({ success: true, user: master });
+
     const usuario = await buscarUsuarioPorLogin(login);
     if (!usuario || !validarSenha(senha, usuario.password_hash)) {
       return res.status(401).json({ success: false, error: 'Credenciais invalidas' });
