@@ -1180,6 +1180,8 @@ const App = {
     document.getElementById('count-concluidos').textContent =
       `${lista.length} item${lista.length !== 1 ? 's' : ''}`;
 
+    const podeExcluir = typeof Auth === 'undefined' || Auth.pode('excluir');
+
     tbody.innerHTML = lista.length === 0
       ? `<tr><td colspan="9">
            <div class="empty-state">
@@ -1204,11 +1206,28 @@ const App = {
               <button class="btn-icon"
                 onclick="App.abrirConferenciaExpedicao('${escapar(e.id)}')"
                 title="Ver conferência">👁</button>
+              ${podeExcluir ? `
+                <button class="btn-icon danger"
+                  onclick="App.excluirConcluido('${escapar(e.id)}')"
+                  title="Excluir">✕</button>` : ''}
             </div>
           </td>
         </tr>`).join('');
 
     this.compactarHistoricoProducao();
+  },
+
+  excluirConcluido(id) {
+    if (!confirm('Deseja excluir este concluído?')) return;
+    this.data.expedicao = (this.data.expedicao || []).filter(e => e.id !== id);
+    Store.save(this.data);
+    this.log('Excluir Concluído', { expedicaoId: id });
+    delete this._pageContentCache['concluidos'];
+    delete this._pageContentCache['expedicao'];
+    delete this._pageContentCache['dashboard'];
+    this.navigate('concluidos', { force: true });
+    this._atualizarFooter();
+    this.toast('Concluído excluído.', 'success');
   },
 
   renderAuditoria() {
