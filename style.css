@@ -56,8 +56,8 @@ html, body {
   top: 0; left: 0;
   width: var(--sidebar-w);
   height: 100vh;
-  background: #f24105;
-  border-right: 1px solid rgba(255, 255, 255, 0.28);
+  background: var(--bg-2);
+  border-right: 2px solid var(--accent);
   display: flex;
   flex-direction: column;
   z-index: 100;
@@ -79,14 +79,14 @@ html, body {
   align-items: center;
   min-height: 88px;
   padding: 18px 16px 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.26);
+  border-bottom: 1px solid var(--border);
 }
 
 .maera-logo {
   display: block;
   width: min(170px, 100%);
   height: auto;
-  filter: brightness(0) invert(1);
+  filter: none;
 }
 
 .sidebar-nav {
@@ -104,7 +104,7 @@ html, body {
   padding: 11px 18px;
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text-muted);
   cursor: pointer;
   font-family: var(--font-sans);
   font-size: 13px;
@@ -120,24 +120,24 @@ html, body {
   font-size: 16px;
   width: 18px;
   flex-shrink: 0;
-  color: #fff;
+  color: var(--accent);
   opacity: 0.95;
 }
 
 .nav-item:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.12);
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .nav-item.active {
-  color: #fff;
-  border-left-color: #fff;
-  background: rgba(255, 255, 255, 0.18);
+  color: var(--accent);
+  border-left-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .sidebar-footer {
   padding: 14px 18px;
-  border-top: 1px solid rgba(255, 255, 255, 0.26);
+  border-top: 1px solid var(--border);
 }
 
 .data-info {
@@ -146,25 +146,25 @@ html, body {
   gap: 2px;
   font-family: var(--font-mono);
   font-size: 10px;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--text-muted);
 }
 
 .sidebar .data-info span,
 .sidebar #total-registros,
 .sidebar #ultima-atualizacao {
-  color: rgba(255, 255, 255, 0.9) !important;
+  color: var(--text-muted) !important;
 }
 
 .sidebar button[onclick="Auth.logout()"] {
-  color: #fff !important;
-  border-color: rgba(255, 255, 255, 0.8) !important;
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
   background: transparent !important;
 }
 
 .sidebar button[onclick="Auth.logout()"]:hover {
-  color: #f24105 !important;
-  background: #fff !important;
-  border-color: #fff !important;
+  color: #fff !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
 }
 
 /* ── TOPBAR ── */
