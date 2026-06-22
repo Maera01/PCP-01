@@ -1130,6 +1130,24 @@ const App = {
     const prod = gv('np-produto');
     if (!prod) { this.toast('Selecione um produto!', 'error'); return; }
 
+    const quantidade = parseInt(gv('np-quantidade'), 10);
+    if (!quantidade || quantidade < 1) {
+      this.toast('Informe uma quantidade válida.', 'error');
+      return;
+    }
+
+    const dataPedido = gv('np-data-pedido');
+    if (!dataPedido) {
+      this.toast('Informe a data do pedido.', 'error');
+      return;
+    }
+
+    const prazo = gv('np-prazo');
+    if (!prazo) {
+      this.toast('Informe o prazo de produção.', 'error');
+      return;
+    }
+
     const serie = gv('np-serie').trim();
     if (this.serieJaCadastrada(serie)) {
       this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
@@ -1149,13 +1167,13 @@ const App = {
       serie,
       cliente:          gv('np-cliente').trim(),
       cor:              gv('np-cor'),
-      quantidade:       parseInt(gv('np-quantidade')) || 1,
+      quantidade,
       situacao:         gv('np-situacao'),
       urgente,
       posicaoLista,
-      dataPedido:       gv('np-data-pedido'),
+      dataPedido,
       prazoDias,
-      prazo:            gv('np-prazo'),
+      prazo,
       observacao:       gv('np-observacao').trim(),
       observacaoAlmox:  '',
       statusVencimento: 'Aguardando produção',
@@ -1701,11 +1719,14 @@ const App = {
               ${podeConferirExp ? `
                 <button class="btn-icon"
                   onclick="App.abrirConferenciaExpedicao('${escapar(e.id)}')"
-                  title="Conferir equipamento e acessórios">☑</button>` : ''}
+                  title="Conferir equipamento e acessórios">☑</button>` : `
+                <button class="btn-icon"
+                  onclick="App.abrirConferenciaExpedicao('${escapar(e.id)}')"
+                  title="Ver checklist e conferência">👁</button>`}
               ${podeExcluirExp ? `
                 <button class="btn-icon danger"
                   onclick="App.excluirExpedicao('${escapar(e.id)}')"
-                  title="Excluir">✕</button>` : '—'}
+                  title="Excluir">✕</button>` : ''}
             </div>
           </td>
         </tr>`).join('');
@@ -1995,8 +2016,9 @@ const App = {
     if (idx < 0) return;
     const item = this.data.expedicao[idx];
     this._conferirExpIdx = idx;
+    const canEditExp = typeof Auth === 'undefined' || Auth.pode('editarExpedicao');
     document.getElementById('conf-exp-titulo').textContent =
-      `Conferir — ${item.equipamento}${item.serie ? ' / ' + item.serie : ''}`;
+      `${canEditExp ? 'Conferir' : 'Visualizar'} — ${item.equipamento}${item.serie ? ' / ' + item.serie : ''}`;
     document.getElementById('conf-exp-equipamento').value = item.equipamento || '';
     document.getElementById('conf-exp-serie').value = item.serie || '';
     document.getElementById('conf-exp-estado').value = item.estadoGeral || '';
@@ -2006,8 +2028,6 @@ const App = {
 
     const box = document.getElementById('conf-exp-checklist');
     const acessorios = item.acessorios || [];
-    const perfil = typeof Auth === 'undefined' ? null : Auth.getPerfil();
-    const canEditExp = !perfil || ['admin','expedicao'].includes(perfil);
     box.innerHTML = acessorios.length ? acessorios.map((a, idxAcessorio) => `
       <label class="checklist-item">
         <input type="checkbox" class="conf-exp-acessorio-check" value="${idxAcessorio}"
@@ -2104,8 +2124,7 @@ const App = {
     if (this._conferirExpIdx === null || this._conferirExpIdx === undefined) return;
     const item = this.data.expedicao[this._conferirExpIdx];
     if (!item) return;
-    const perfil = typeof Auth === 'undefined' ? null : Auth.getPerfil();
-    const canEditExp = !perfil || ['admin','expedicao'].includes(perfil);
+    const canEditExp = typeof Auth === 'undefined' || Auth.pode('editarExpedicao');
     if (!canEditExp) {
       this.toast('Sem permissão para editar esta conferência.', 'error');
       return;
