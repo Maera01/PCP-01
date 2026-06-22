@@ -1101,7 +1101,12 @@ const App = {
     this.closeModal('editar-pedido');
     delete this._pageContentCache['pedidos'];
     delete this._pageContentCache['dashboard'];
-    this.log('Editar Pedido', { pedidoId: p.id });
+    this.log('Editar Pedido', {
+      pedidoId: p.id,
+      produto: p.produto,
+      serie: p.serie,
+      cliente: p.cliente
+    });
     this.navigate(this.paginaAtual, { force: true });
     this.toast('Pedido atualizado com sucesso!', 'success');
     this._editIdx = null;
@@ -1136,6 +1141,7 @@ const App = {
       return;
     }
     const urgente = !!document.getElementById('np-urgente')?.checked;
+    const posicaoLista = gv('np-posicao-lista') === 'topo' ? 'topo' : 'final';
     const prazoDias = gv('np-prazo-dias') === '' ? '' : parseInt(gv('np-prazo-dias'), 10);
     if (prazoDias !== '' && (Number.isNaN(prazoDias) || prazoDias < 0)) {
       this.toast('Informe uma quantidade de dias de prazo válida.', 'error');
@@ -1151,6 +1157,7 @@ const App = {
       quantidade:       parseInt(gv('np-quantidade')) || 1,
       situacao:         gv('np-situacao'),
       urgente,
+      posicaoLista,
       dataPedido:       gv('np-data-pedido'),
       prazoDias,
       prazo:            gv('np-prazo'),
@@ -1179,10 +1186,15 @@ const App = {
       }
     };
 
-    if (urgente && this.podeOrdenarPedidos()) this.data.pedidos.unshift(p);
+    if (posicaoLista === 'topo') this.data.pedidos.unshift(p);
     else this.data.pedidos.push(p);
     Store.save(this.data);
-    this.log('Criar Pedido', { pedidoId: p.id });
+    this.log('Criar Pedido', {
+      pedidoId: p.id,
+      produto: p.produto,
+      serie: p.serie,
+      cliente: p.cliente
+    });
     this.closeModal('novo-pedido');
     delete this._pageContentCache['pedidos'];
     delete this._pageContentCache['dashboard'];
@@ -1195,9 +1207,15 @@ const App = {
 
   excluirPedido(id) {
     if (!confirm('Deseja excluir este pedido?')) return;
+    const pedido = this.data.pedidos.find(p => p.id === id);
     this.data.pedidos = this.data.pedidos.filter(p => p.id !== id);
     Store.save(this.data);
-    this.log('Excluir Pedido', { pedidoId: id });
+    this.log('Excluir Pedido', {
+      pedidoId: id,
+      produto: pedido?.produto || '',
+      serie: pedido?.serie || '',
+      cliente: pedido?.cliente || ''
+    });
     delete this._pageContentCache['pedidos'];
     delete this._pageContentCache['dashboard'];
     this.navigate(this.paginaAtual, { force: true });
@@ -1277,7 +1295,14 @@ const App = {
 
     this.data.expedicao.unshift(itemExpedicao);
     this.data.pedidos.splice(this._finalizarIdx, 1);
-    this.log('Finalizar Pedido', { pedidoId: p.id, expedicaoId: itemExpedicao.id });
+    this.log('Finalizar Pedido', {
+      pedidoId: p.id,
+      expedicaoId: itemExpedicao.id,
+      produto: p.produto,
+      equipamento: itemExpedicao.equipamento,
+      serie: p.serie,
+      cliente: p.cliente
+    });
     Store.save(this.data);
     this.closeModal('finalizar-pedido');
     delete this._pageContentCache['pedidos'];
@@ -1395,9 +1420,15 @@ const App = {
 
   excluirConcluido(id) {
     if (!confirm('Deseja excluir este concluído?')) return;
+    const item = (this.data.expedicao || []).find(e => e.id === id);
     this.data.expedicao = (this.data.expedicao || []).filter(e => e.id !== id);
     Store.save(this.data);
-    this.log('Excluir Concluído', { expedicaoId: id });
+    this.log('Excluir Concluído', {
+      expedicaoId: id,
+      equipamento: item?.equipamento || '',
+      serie: item?.serie || '',
+      cliente: item?.pedidoSnapshot?.cliente || ''
+    });
     delete this._pageContentCache['concluidos'];
     delete this._pageContentCache['expedicao'];
     delete this._pageContentCache['dashboard'];
@@ -1406,20 +1437,113 @@ const App = {
     this.toast('Concluído excluído.', 'success');
   },
 
+  buscarPedidoAuditoria(id) {
+    if (!id) return null;
+    const pedidos = this.data.pedidos || [];
+    const expedicao = this.data.expedicao || [];
+
+    return pedidos.find(p => p.id === id)
+      || expedicao.find(e => e.origemPedidoId === id)?.pedidoSnapshot
+      || expedicao.find(e => e.pedidoSnapshot?.id === id)?.pedidoSnapshot
+      || null;
+  },
+
+  buscarExpedicaoAuditoria(id) {
+    if (!id) return null;
+    return (this.data.expedicao || []).find(e => e.id === id)
+      || (this.data.expedicao || []).find(e => e.origemPedidoId === id)
+      || null;
+  },
+
+  dadosEquipamentoAuditoria(item = {}) {
+    const snapshot = item.pedidoSnapshot || {};
+    return {
+      produto: item.produto || item.equipamento || snapshot.produto || snapshot.equipamento || '',
+      serie: item.serie || snapshot.serie || '',
+      cliente: item.cliente || snapshot.cliente || ''
+    };
+  },
+
+  resumoPedidoAuditoria(pedido, fallbackId = '') {
+    if (!pedido) return fallbackId ? `pedido ID ${fallbackId}` : 'pedido';
+    const dados = this.dadosEquipamentoAuditoria(pedido);
+    const partes = [];
+    if (dados.produto && dados.serie) partes.push(`produto ${dados.produto}, série ${dados.serie}`);
+    else if (dados.produto) partes.push(`produto ${dados.produto}`);
+    else if (dados.serie) partes.push(`série ${dados.serie}`);
+    if (dados.cliente) partes.push(`cliente ${dados.cliente}`);
+    return partes.length ? partes.join(' / ') : `pedido ID ${pedido.id || fallbackId}`;
+  },
+
+  resumoExpedicaoAuditoria(item, fallbackId = '') {
+    if (!item) return fallbackId ? `expedição ID ${fallbackId}` : 'expedição';
+    const dados = this.dadosEquipamentoAuditoria(item);
+    const partes = [];
+    if (dados.produto && dados.serie) partes.push(`produto ${dados.produto}, série ${dados.serie}`);
+    else if (dados.produto) partes.push(`produto ${dados.produto}`);
+    else if (dados.serie) partes.push(`série ${dados.serie}`);
+    if (dados.cliente) partes.push(`cliente ${dados.cliente}`);
+    return partes.length ? partes.join(' / ') : `expedição ID ${item.id || fallbackId}`;
+  },
+
+  detalheAuditoria(log) {
+    const d = log.details || {};
+    const expedicao = this.buscarExpedicaoAuditoria(d.expedicaoId)
+      || (d.equipamento || d.serie || d.status ? d : null);
+    const pedido = this.buscarPedidoAuditoria(d.pedidoId)
+      || expedicao?.pedidoSnapshot
+      || (d.produto || d.equipamento || d.serie || d.cliente ? d : null);
+    const acao = String(log.action || '').toLowerCase();
+
+    if (acao.includes('criar pedido')) {
+      const posicao = d.posicaoLista === 'topo' ? ' no topo da lista' : (d.posicaoLista === 'final' ? ' no final da lista' : '');
+      return `Cadastrou ${this.resumoPedidoAuditoria(pedido, d.pedidoId)}${posicao}.`;
+    }
+    if (acao.includes('editar pedido')) return `Editou ${this.resumoPedidoAuditoria(pedido, d.pedidoId)}.`;
+    if (acao.includes('excluir pedido')) return `Excluiu ${this.resumoPedidoAuditoria(pedido, d.pedidoId)}.`;
+    if (acao.includes('finalizar pedido')) return `Finalizou ${this.resumoPedidoAuditoria(pedido, d.pedidoId)} e enviou para ${this.resumoExpedicaoAuditoria(expedicao, d.expedicaoId)}.`;
+    if (acao.includes('salvar conferência')) {
+      const status = d.status ? ` Resultado: ${d.status}.` : '';
+      return `Conferiu ${this.resumoExpedicaoAuditoria(expedicao, d.expedicaoId)}.${status}`;
+    }
+    if (acao.includes('criar expedição')) return `Criou ${this.resumoExpedicaoAuditoria(expedicao, d.expedicaoId)}.`;
+    if (acao.includes('excluir concluído')) return `Excluiu o concluído de ${this.resumoExpedicaoAuditoria(expedicao, d.expedicaoId)}.`;
+    if (acao.includes('criar produto')) return `Cadastrou o produto ${d.produto || 'sem nome informado'}.`;
+    if (acao.includes('editar produto')) {
+      return d.original && d.original !== d.produto
+        ? `Renomeou o produto ${d.original} para ${d.produto}.`
+        : `Editou o produto ${d.produto || 'sem nome informado'}.`;
+    }
+    if (acao.includes('excluir produto')) return `Excluiu o produto ${d.produto || 'sem nome informado'}.`;
+    if (acao.includes('salvar kit')) return `Salvou o kit de acessórios do produto ${d.kitProduto || 'não identificado'}.`;
+    if (acao.includes('excluir kit')) return `Excluiu o kit ID ${d.kitId || 'não identificado'}.`;
+
+    const detalhes = Object.entries(d).map(([k, v]) => `${k}: ${v}`).join(', ');
+    return detalhes || 'Sem detalhes adicionais.';
+  },
+
   renderAuditoria() {
-    const lista = this.data.logs || [];
+    const filtro = (document.getElementById('busca-auditoria')?.value || '').toLowerCase();
+    const lista = (this.data.logs || []).filter(log => {
+      const detalhe = this.detalheAuditoria(log);
+      const texto = [log.ts, log.user, log.perfil, log.action, detalhe].join(' ').toLowerCase();
+      return !filtro || texto.includes(filtro);
+    });
     const tbody = document.getElementById('tbody-auditoria');
     if (!tbody) return;
     document.getElementById('count-auditoria').textContent = `${lista.length} registro${lista.length!==1 ? 's' : ''}`;
     tbody.innerHTML = lista.length === 0 ? `<tr><td colspan="5"><div class="empty-state">Nenhum log</div></td></tr>`
-      : lista.map(l => `
+      : lista.map(l => {
+        const detalhe = this.detalheAuditoria(l);
+        return `
         <tr>
           <td style="font-family:var(--font-mono);font-size:11px">${fmtData(l.ts)}</td>
           <td>${escapar(l.user)}</td>
           <td>${escapar(l.perfil)}</td>
           <td>${escapar(l.action)}</td>
-          <td style="font-family:var(--font-mono);font-size:11px">${escapar(JSON.stringify(l.details))}</td>
-        </tr>`).join('');
+          <td>${escapar(detalhe)}</td>
+        </tr>`;
+      }).join('');
   },
 
   async renderUsuarios() {
@@ -2029,7 +2153,13 @@ const App = {
     item.statusConferencia = statusConferenciaExpedicao(item);
     item.dataConferencia = new Date().toISOString();
 
-    this.log('Salvar Conferência Expedição', { expedicaoId: item.id, status: item.statusConferencia });
+    this.log('Salvar Conferência Expedição', {
+      expedicaoId: item.id,
+      equipamento: item.equipamento,
+      serie: item.serie,
+      cliente: item.pedidoSnapshot?.cliente || '',
+      status: item.statusConferencia
+    });
     Store.save(this.data);
     this.closeModal('conferir-expedicao');
     delete this._pageContentCache['expedicao'];
@@ -2076,7 +2206,11 @@ const App = {
     };
 
     this.data.expedicao.unshift(e);
-    this.log('Criar Expedição', { expedicaoId: e.id });
+    this.log('Criar Expedição', {
+      expedicaoId: e.id,
+      equipamento: e.equipamento,
+      serie: e.serie
+    });
     Store.save(this.data);
     this.closeModal('nova-expedicao');
     delete this._pageContentCache['expedicao'];
