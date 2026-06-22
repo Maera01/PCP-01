@@ -1047,13 +1047,13 @@ select option { background: var(--bg-2); }
     max-width: 170px;
   }
 
-  #page-pedidos .table th:nth-child(4),
-  #page-pedidos .table td:nth-child(4) {
-    max-width: 250px;
+  #page-pedidos .table th:nth-child(3),
+  #page-pedidos .table td:nth-child(3) {
+    max-width: 130px;
   }
 
   #page-pedidos .table td:nth-child(2),
-  #page-pedidos .table td:nth-child(4) {
+  #page-pedidos .table td:nth-child(3) {
     overflow: hidden;
     text-overflow: ellipsis;
   }

@@ -174,23 +174,18 @@ function diasAtrasoPedido(pedido) {
 }
 
 function badgeVencimento(status, dias, pedido = null) {
-  if (!status) return '<span class="badge badge-default">—</span>';
   const atraso = pedido ? diasAtrasoPedido(pedido) : (parseInt(dias) || 0);
   if (atraso > 0) return `<span class="badge badge-danger">⚠ ${atraso}d atraso</span>`;
+  return '<span class="badge badge-success">No prazo</span>';
+}
 
-  const s = status.toString().toUpperCase();
-  if (s.includes('PRODUZIDO')) {
-    return `<span class="badge badge-success">✓ No prazo</span>`;
+function badgeStatusProducao(pedido) {
+  if (pedidoConcluido(pedido)) {
+    return '<span class="badge badge-success">Produção concluída</span>';
   }
-  if (s.includes('ATRASO'))  return `<span class="badge badge-danger">ATRASADO</span>`;
-  if (s.includes('PRÓXIMO') || s.includes('PROXIMO')) return `<span class="badge badge-warning">PRÓXIMO</span>`;
-  if (s.includes('ADIADO'))  return `<span class="badge badge-default">ADIADO</span>`;
-  if (pedido) {
-    return producaoIniciada(pedido)
-      ? '<span class="badge badge-default">Em produção</span>'
-      : '<span class="badge badge-default">Aguardando produção</span>';
-  }
-  return `<span class="badge badge-default">${status}</span>`;
+  return producaoIniciada(pedido)
+    ? '<span class="badge badge-warning">Em produção</span>'
+    : '<span class="badge badge-default">Aguardando produção</span>';
 }
 
 function badgeUrgencia(pedido) {
@@ -568,14 +563,14 @@ const App = {
           </td>
           <td><strong>${escapar(p.produto)}</strong> ${badgeUrgencia(p)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
-          <td>${escapar(p.cliente)||'—'}</td>
+          <td class="col-hide-notebook">${escapar(p.cliente)||'—'}</td>
           <td class="col-hide-notebook">${corDot(p.cor)} ${escapar(p.cor)||'—'}</td>
           <td class="col-hide-notebook" style="text-align:center">${p.quantidade}</td>
           <td class="col-hide-notebook" style="font-family:var(--font-mono);font-size:11px">${fmtData(p.dataPedido)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.prazo)}</td>
           <td>${badgeVencimento(p.statusVencimento, p.diasAtraso, p)}</td>
+          <td>${badgeStatusProducao(p)}</td>
           <td>${badgeSep(p.statusSep)}</td>
-          <td class="col-hide-notebook"><span class="badge badge-default">${escapar(etapaAtual(p))}</span></td>
           <td>
             <div class="actions-cell">
               ${podeEditar ? `
