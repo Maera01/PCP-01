@@ -194,14 +194,15 @@ function badgeUrgencia(pedido) {
 
 function badgeSep(status) {
   if (!status) return '<span class="badge badge-default">—</span>';
+  const statusLabel = status === 'Aguardando produção' ? 'Aguardando Separação' : status;
   const mapa = {
     'Separado':          'badge-success',
-    'Aguardando produção': 'badge-default',
+    'Aguardando Separação': 'badge-default',
     'Em Separação':      'badge-warning',
     'Faltando MP':       'badge-danger',
     'Separação Parcial': 'badge-warning'
   };
-  return `<span class="badge ${mapa[status]||'badge-default'}">${status}</span>`;
+  return `<span class="badge ${mapa[statusLabel]||'badge-default'}">${statusLabel}</span>`;
 }
 
 function etapaAtual(pedido) {
@@ -671,7 +672,8 @@ const App = {
       const texto = [p.produto, p.serie, p.cliente, p.numeroOP, p.observacao, p.observacaoAlmox].join(' ').toLowerCase();
       if (busca && !texto.includes(busca)) return false;
       if (status) {
-        const match = p.statusSep === status
+        const statusSep = p.statusSep === 'Aguardando produção' ? 'Aguardando Separação' : p.statusSep;
+        const match = statusSep === status
           || p.statusVencimento === status
           || (status === 'ATRASADO' && diasAtrasoPedido(p) > 0);
         if (!match) return false;
@@ -737,8 +739,6 @@ const App = {
             <span>${fmtData(p.dataSep)}</span></div>
           <div class="detail-item"><label>N° OP</label>
             <span>${escapar(p.numeroOP)||'—'}</span></div>
-          <div class="detail-item"><label>Faltante</label>
-            <span>${escapar(p.materialFaltante)||'—'}</span></div>
           <div class="detail-item"><label>Entrega Parcial</label>
             <span>${fmtData(p.dataEntregaParcial)}</span></div>
           <div class="detail-item"><label>Pedido de Peças</label>
@@ -799,9 +799,10 @@ const App = {
     // ── ALMOXARIFADO ──
     sv('ed-serie').value      = p.serie              || '';
     sv('ed-op').value         = p.numeroOP           || '';
-    sv('ed-statussep').value  = p.statusSep          || 'Aguardando produção';
+    sv('ed-statussep').value  = p.statusSep === 'Aguardando produção'
+      ? 'Aguardando Separação'
+      : (p.statusSep || 'Aguardando Separação');
     sv('ed-datsep').value     = p.dataSep            || '';
-    sv('ed-matfaltante').value = p.materialFaltante   || '';
     sv('ed-entparcial').value = p.dataEntregaParcial || '';
     sv('ed-enttotal').value   = p.dataEntregaTotal   || '';
     sv('ed-datapedidopecas').value = p.dataPedidoPecas || '';
@@ -1044,7 +1045,6 @@ const App = {
       p.numeroOP           = gv('ed-op').trim();
       p.statusSep          = gv('ed-statussep');
       p.dataSep            = gv('ed-datsep');
-      p.materialFaltante   = gv('ed-matfaltante');
       p.dataEntregaParcial = gv('ed-entparcial');
       p.dataEntregaTotal   = gv('ed-enttotal');
       p.dataPedidoPecas    = p.dataEntregaParcial ? gv('ed-datapedidopecas') : '';
@@ -1178,11 +1178,10 @@ const App = {
       observacaoAlmox:  '',
       statusVencimento: 'Aguardando produção',
       diasAtraso:       0,
-      statusSep:        'Aguardando produção',
+      statusSep:        'Aguardando Separação',
       dataSep:          '',
       numeroOP:         '',
       materialCorreto:  '',
-      materialFaltante: '',
       dataEntregaParcial: '',
       dataEntregaTotal:   '',
       dataPedidoPecas:    '',
