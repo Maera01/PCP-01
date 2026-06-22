@@ -6,6 +6,7 @@
         <option value="">Todos os status</option>
         <option value="Produzido">Produzido</option>
         <option value="ATRASADO">Atrasado</option>
+        <option value="Aguardando produção">Aguardando produção</option>
         <option value="Separado">Separado</option>
         <option value="Em Separação">Em Separação</option>
         <option value="Faltando MP">Faltando MP</option>
@@ -22,11 +23,14 @@
     </div>
     <span class="count-badge" id="count-pedidos">0 pedidos</span>
   </div>
+  <div class="priority-info">
+    <strong>Prioridade:</strong> os pedidos mais acima na lista devem ser feitos primeiro. A ordem normal segue a entrada dos pedidos; o admin pode reorganizar quando houver urgência.
+  </div>
   <div class="card">
     <div class="table-wrapper">
       <table class="table">
         <thead><tr>
-          <th>Produto</th><th>Série</th><th>Cliente</th><th>Cor</th><th>Qtd</th>
+          <th>Prioridade</th><th>Produto</th><th>Série</th><th>Cliente</th><th>Cor</th><th>Qtd</th>
           <th>Data Pedido</th><th>Prazo</th><th>Vencimento</th><th>Status Sep.</th>
           <th>Etapa Atual</th><th>Ações</th>
         </tr></thead>

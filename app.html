@@ -269,6 +269,13 @@
             </select>
           </div>
           <div class="form-group">
+            <label>Urgência</label>
+            <label class="checkbox-label checkbox-card">
+              <input type="checkbox" id="ed-urgente"/>
+              Pedido urgente
+            </label>
+          </div>
+          <div class="form-group">
             <label>Data do Pedido</label>
             <input class="input" type="date" id="ed-datapedido"/>
           </div>
@@ -301,6 +308,7 @@
           <div class="form-group">
             <label>Status Separação</label>
             <select class="input" id="ed-statussep">
+              <option>Aguardando produção</option>
               <option>Separado</option>
               <option>Em Separação</option>
               <option>Faltando MP</option>
@@ -470,17 +478,24 @@
           <input class="input" type="number"
             id="np-quantidade" min="1" value="1"/>
         </div>
-        <div class="form-group">
-          <label>Situação</label>
-          <select class="input" id="np-situacao">
+          <div class="form-group">
+            <label>Situação</label>
+            <select class="input" id="np-situacao">
             <option>VENDIDO</option>
             <option>LOCADO</option>
             <option>DEMONSTRAÇÃO</option>
             <option>EMPRÉSTIMO</option>
             <option>ESTOQUE LOCAÇÃO</option>
-            <option>VENDA PROMISSORA</option>
-          </select>
-        </div>
+              <option>VENDA PROMISSORA</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Urgência</label>
+            <label class="checkbox-label checkbox-card">
+              <input type="checkbox" id="np-urgente"/>
+              Pedido urgente
+            </label>
+          </div>
         <div class="form-group">
           <label>Data do Pedido</label>
           <input class="input" type="date" id="np-data-pedido"/>

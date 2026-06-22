@@ -427,6 +427,22 @@ const nomeKit = (kit) =>
   String(kit?.nome || kit?.id || '').trim();
 
 // ── SALVAR/CARREGAR REGISTROS (PostgreSQL) ──
+const normalizarSerie = (serie) =>
+  String(serie || '').trim().replace(/\s+/g, ' ').toUpperCase();
+
+const encontrarSerieDuplicada = (pedidos = []) => {
+  const series = new Set();
+
+  for (const pedido of Array.isArray(pedidos) ? pedidos : []) {
+    const serie = normalizarSerie(pedido?.serie);
+    if (!serie) continue;
+    if (series.has(serie)) return serie;
+    series.add(serie);
+  }
+
+  return null;
+};
+
 const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => {
   if (!Array.isArray(registros)) return;
 
@@ -584,6 +600,15 @@ app.post('/api/data', async (req, res) => {
   try {
     const { data } = req.body;
     if (!data) return res.status(400).json({ success: false, error: 'data is required' });
+
+    const serieDuplicada = encontrarSerieDuplicada(data.pedidos);
+    if (serieDuplicada) {
+      return res.status(409).json({
+        success: false,
+        error: `Ja existe um pedido cadastrado com o numero de serie ${serieDuplicada}`
+      });
+    }
+
     await saveData('app_data', data);
     res.json({ success: true, message: 'Dados salvos com sucesso' });
   } catch (err) {

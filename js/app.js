@@ -124,6 +124,10 @@ function uid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 }
 
+function normalizarSerie(serie) {
+  return String(serie || '').trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
 function fmtData(val) {
   if (!val) return '—';
   try {
@@ -143,24 +147,53 @@ function corDot(cor) {
   return `<span class="cor-dot ${cls}" title="${cor}"></span>`;
 }
 
-function badgeVencimento(status, dias) {
+function producaoIniciada(pedido) {
+  return ET_KEYS.some(key => !!pedido?.etapas?.[key]?.inicio);
+}
+
+function diasAtrasoPedido(pedido) {
+  const atrasoManual = parseInt(pedido?.diasAtraso) || 0;
+  if (atrasoManual > 0) return atrasoManual;
+  if (!pedido?.prazo || pedidoConcluido(pedido)) return 0;
+
+  const prazo = new Date(`${pedido.prazo}T00:00:00`);
+  if (isNaN(prazo.getTime())) return 0;
+
+  const hoje = new Date();
+  const hojeLocal = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+  const diff = Math.floor((hojeLocal - prazo) / 86400000);
+  return diff > 0 ? diff : 0;
+}
+
+function badgeVencimento(status, dias, pedido = null) {
   if (!status) return '<span class="badge badge-default">—</span>';
+  const atraso = pedido ? diasAtrasoPedido(pedido) : (parseInt(dias) || 0);
+  if (atraso > 0) return `<span class="badge badge-danger">⚠ ${atraso}d atraso</span>`;
+
   const s = status.toString().toUpperCase();
   if (s.includes('PRODUZIDO')) {
-    const atraso = parseInt(dias) || 0;
-    if (atraso > 0) return `<span class="badge badge-danger">⚠ ${atraso}d atraso</span>`;
     return `<span class="badge badge-success">✓ No prazo</span>`;
   }
   if (s.includes('ATRASO'))  return `<span class="badge badge-danger">ATRASADO</span>`;
   if (s.includes('PRÓXIMO') || s.includes('PROXIMO')) return `<span class="badge badge-warning">PRÓXIMO</span>`;
   if (s.includes('ADIADO'))  return `<span class="badge badge-default">ADIADO</span>`;
+  if (pedido) {
+    return producaoIniciada(pedido)
+      ? '<span class="badge badge-default">Em produção</span>'
+      : '<span class="badge badge-default">Aguardando produção</span>';
+  }
   return `<span class="badge badge-default">${status}</span>`;
+}
+
+function badgeUrgencia(pedido) {
+  return pedido?.urgente ? '<span class="badge badge-danger">Urgente</span>' : '';
 }
 
 function badgeSep(status) {
   if (!status) return '<span class="badge badge-default">—</span>';
   const mapa = {
     'Separado':          'badge-success',
+    'Aguardando produção': 'badge-default',
     'Em Separação':      'badge-warning',
     'Faltando MP':       'badge-danger',
     'Separação Parcial': 'badge-warning'
@@ -399,7 +432,7 @@ const App = {
     const {pedidos, expedicao} = this.data;
     const pedidosLista = pedidos || [];
     const expedicaoLista = expedicao || [];
-    const emAtraso = pedidosLista.filter(p => (parseInt(p.diasAtraso)||0) > 0);
+    const emAtraso = pedidosLista.filter(p => diasAtrasoPedido(p) > 0);
     const faltandoMp = pedidosLista.filter(p => String(p.statusSep || '').trim() === 'Faltando MP');
     const separacaoParcial = pedidosLista.filter(p => String(p.statusSep || '').toLowerCase().includes('parcial'));
     const prontosExpedicao = pedidosLista.filter(p => pedidoConcluido(p) && separacaoPermiteFinalizacao(p.statusSep));
@@ -423,7 +456,7 @@ const App = {
         <td><strong>${escapar(p.produto)}</strong></td>
         <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
         <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.prazo)}</td>
-        <td>${badgeVencimento(p.statusVencimento, p.diasAtraso)}</td>
+        <td>${badgeVencimento(p.statusVencimento, p.diasAtraso, p)}</td>
         <td><span class="badge badge-accent">${escapar(etapaAtual(p))}</span></td>
       </tr>`).join('') ||
       `<tr><td colspan="5">
@@ -498,23 +531,41 @@ const App = {
 
     const podeExcluir = typeof Auth === 'undefined' || Auth.pode('excluir');
     const podeFinalizar = typeof Auth === 'undefined' || Auth.pode('editarProducao');
+    const podeOrdenar = this.podeOrdenarPedidos();
 
     tbody.innerHTML = lista.length === 0
-      ? `<tr><td colspan="11">
+      ? `<tr><td colspan="12">
            <div class="empty-state">
              <span class="empty-icon">◧</span>Nenhum pedido encontrado
            </div>
          </td></tr>`
       : lista.map(p => `
-        <tr>
-          <td><strong>${escapar(p.produto)}</strong></td>
+        <tr class="${[
+            p.urgente ? 'row-urgente' : '',
+            diasAtrasoPedido(p) > 0 ? 'row-atrasado' : ''
+          ].filter(Boolean).join(' ')}"
+          draggable="${podeOrdenar ? 'true' : 'false'}"
+          ondragstart="App.iniciarArrastePedido(event, '${escapar(p.id)}')"
+          ondragover="App.permitirSoltarPedido(event)"
+          ondrop="App.soltarPedido(event, '${escapar(p.id)}')"
+          ondragend="App.finalizarArrastePedido(event)">
+          <td>
+            <div class="priority-cell">
+              ${podeOrdenar ? `
+                <span class="drag-handle" title="Arrastar para ordenar">↕</span>
+                <button class="btn-icon priority-btn" onclick="App.moverPedido('${escapar(p.id)}', -1)" title="Subir prioridade">↑</button>
+                <button class="btn-icon priority-btn" onclick="App.moverPedido('${escapar(p.id)}', 1)" title="Descer prioridade">↓</button>
+              ` : '<span class="badge badge-default">Admin</span>'}
+            </div>
+          </td>
+          <td><strong>${escapar(p.produto)}</strong> ${badgeUrgencia(p)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
           <td>${escapar(p.cliente)||'—'}</td>
           <td>${corDot(p.cor)} ${escapar(p.cor)||'—'}</td>
           <td style="text-align:center">${p.quantidade}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.dataPedido)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.prazo)}</td>
-          <td>${badgeVencimento(p.statusVencimento, p.diasAtraso)}</td>
+          <td>${badgeVencimento(p.statusVencimento, p.diasAtraso, p)}</td>
           <td>${badgeSep(p.statusSep)}</td>
           <td><span class="badge badge-default">${escapar(etapaAtual(p))}</span></td>
           <td>
@@ -539,6 +590,75 @@ const App = {
         </tr>`).join('');
   },
 
+  podeOrdenarPedidos() {
+    return typeof Auth === 'undefined' || Auth.getPerfil() === 'admin';
+  },
+
+  salvarOrdemPedidos() {
+    Store.save(this.data);
+    delete this._pageContentCache['pedidos'];
+    delete this._pageContentCache['dashboard'];
+    this.filtrarPedidos();
+    this.toast('Prioridade dos pedidos atualizada.', 'success');
+  },
+
+  moverPedido(id, direcao) {
+    if (!this.podeOrdenarPedidos()) {
+      this.toast('Sem permissão para reorganizar pedidos.', 'error');
+      return;
+    }
+
+    const pedidos = this.data.pedidos || [];
+    const origem = pedidos.findIndex(p => p.id === id);
+    const destino = origem + direcao;
+    if (origem < 0 || destino < 0 || destino >= pedidos.length) return;
+
+    const [pedido] = pedidos.splice(origem, 1);
+    pedidos.splice(destino, 0, pedido);
+    this.salvarOrdemPedidos();
+  },
+
+  iniciarArrastePedido(ev, id) {
+    if (!this.podeOrdenarPedidos()) {
+      ev.preventDefault();
+      return;
+    }
+    this._pedidoArrastadoId = id;
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', id);
+    ev.currentTarget.classList.add('dragging');
+  },
+
+  permitirSoltarPedido(ev) {
+    if (!this._pedidoArrastadoId) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+  },
+
+  soltarPedido(ev, destinoId) {
+    ev.preventDefault();
+    const origemId = this._pedidoArrastadoId || ev.dataTransfer.getData('text/plain');
+    if (!origemId || origemId === destinoId) return;
+
+    const pedidos = this.data.pedidos || [];
+    const origem = pedidos.findIndex(p => p.id === origemId);
+    let destino = pedidos.findIndex(p => p.id === destinoId);
+    if (origem < 0 || destino < 0) return;
+
+    const rect = ev.currentTarget.getBoundingClientRect();
+    const soltarDepois = ev.clientY > rect.top + rect.height / 2;
+    const [pedido] = pedidos.splice(origem, 1);
+    destino = pedidos.findIndex(p => p.id === destinoId);
+    pedidos.splice(soltarDepois ? destino + 1 : destino, 0, pedido);
+    this._pedidoArrastadoId = null;
+    this.salvarOrdemPedidos();
+  },
+
+  finalizarArrastePedido(ev) {
+    ev.currentTarget.classList.remove('dragging');
+    this._pedidoArrastadoId = null;
+  },
+
   filtrarPedidos() {
     const busca  = (document.getElementById('busca-pedido')?.value  || '').toLowerCase();
     const status =  document.getElementById('filtro-status')?.value  || '';
@@ -550,11 +670,11 @@ const App = {
       if (status) {
         const match = p.statusSep === status
           || p.statusVencimento === status
-          || (status === 'ATRASADO' && (parseInt(p.diasAtraso)||0) > 0);
+          || (status === 'ATRASADO' && diasAtrasoPedido(p) > 0);
         if (!match) return false;
       }
       if (venc) {
-        if (venc === 'ATRASADO'  && (parseInt(p.diasAtraso)||0) <= 0) return false;
+        if (venc === 'ATRASADO'  && diasAtrasoPedido(p) <= 0) return false;
         if (venc === 'PRÓXIMO'   && !p.statusVencimento?.includes('PRÓXIMO')) return false;
         if (venc === 'Produzido' && p.statusVencimento !== 'Produzido') return false;
       }
@@ -668,6 +788,7 @@ const App = {
     sv('ed-cor').value        = p.cor        || '';
     sv('ed-quantidade').value = p.quantidade || 1;
     sv('ed-situacao').value   = p.situacao   || 'VENDIDO';
+    sv('ed-urgente').checked  = !!p.urgente;
     sv('ed-datapedido').value = p.dataPedido || '';
     sv('ed-prazo').value      = p.prazo      || '';
     sv('ed-obs-comercial-edit').value = p.observacao || '';
@@ -675,7 +796,7 @@ const App = {
     // ── ALMOXARIFADO ──
     sv('ed-serie').value      = p.serie              || '';
     sv('ed-op').value         = p.numeroOP           || '';
-    sv('ed-statussep').value  = p.statusSep          || 'Em Separação';
+    sv('ed-statussep').value  = p.statusSep          || 'Aguardando produção';
     sv('ed-datsep').value     = p.dataSep            || '';
     sv('ed-matfaltante').value = p.materialFaltante   || '';
     sv('ed-entparcial').value = p.dataEntregaParcial || '';
@@ -878,6 +999,15 @@ const App = {
     return true;
   },
 
+  serieJaCadastrada(serie, ignorarId = null) {
+    const serieNormalizada = normalizarSerie(serie);
+    if (!serieNormalizada) return false;
+
+    return (this.data.pedidos || []).some(p =>
+      p.id !== ignorarId && normalizarSerie(p.serie) === serieNormalizada
+    );
+  },
+
   salvarEdicao() {
     if (this._editIdx === null) return;
     const p  = this.data.pedidos[this._editIdx];
@@ -891,6 +1021,7 @@ const App = {
       p.cor        = gv('ed-cor');
       p.quantidade = parseInt(gv('ed-quantidade')) || 1;
       p.situacao   = gv('ed-situacao');
+      p.urgente    = !!document.getElementById('ed-urgente')?.checked;
       p.dataPedido = gv('ed-datapedido');
       p.prazo      = gv('ed-prazo');
       p.observacao = gv('ed-obs-comercial-edit').trim();
@@ -899,7 +1030,14 @@ const App = {
     // Salva ALMOXARIFADO (se tiver permissão)
     const podeAlm = typeof Auth === 'undefined' || Auth.pode('editarAlmoxarifado');
     if (podeAlm) {
-      p.serie              = gv('ed-serie');
+      const serieEditada = gv('ed-serie').trim();
+      const serieFoiAlterada = normalizarSerie(serieEditada) !== normalizarSerie(p.serie);
+      if (serieFoiAlterada && this.serieJaCadastrada(serieEditada, p.id)) {
+        this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
+        return;
+      }
+
+      p.serie              = serieEditada;
       p.numeroOP           = gv('ed-op').trim();
       p.statusSep          = gv('ed-statussep');
       p.dataSep            = gv('ed-datsep');
@@ -969,21 +1107,29 @@ const App = {
     const prod = gv('np-produto');
     if (!prod) { this.toast('Selecione um produto!', 'error'); return; }
 
+    const serie = gv('np-serie').trim();
+    if (this.serieJaCadastrada(serie)) {
+      this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
+      return;
+    }
+    const urgente = !!document.getElementById('np-urgente')?.checked;
+
     const p = {
       id:               uid(),
       produto:          prod,
-      serie:            gv('np-serie').trim(),
+      serie,
       cliente:          gv('np-cliente').trim(),
       cor:              gv('np-cor'),
       quantidade:       parseInt(gv('np-quantidade')) || 1,
       situacao:         gv('np-situacao'),
+      urgente,
       dataPedido:       gv('np-data-pedido'),
       prazo:            gv('np-prazo'),
       observacao:       gv('np-observacao').trim(),
       observacaoAlmox:  '',
-      statusVencimento: 'Em produção',
+      statusVencimento: 'Aguardando produção',
       diasAtraso:       0,
-      statusSep:        'Em Separação',
+      statusSep:        'Aguardando produção',
       dataSep:          '',
       numeroOP:         '',
       materialCorreto:  '',
@@ -1004,7 +1150,8 @@ const App = {
       }
     };
 
-    this.data.pedidos.unshift(p);
+    if (urgente && this.podeOrdenarPedidos()) this.data.pedidos.unshift(p);
+    else this.data.pedidos.push(p);
     Store.save(this.data);
     this.log('Criar Pedido', { pedidoId: p.id });
     this.closeModal('novo-pedido');

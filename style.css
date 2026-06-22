@@ -353,6 +353,20 @@ html, body {
 }
 
 /* ── INPUTS ── */
+.priority-info {
+  padding: 10px 12px;
+  border: 1px solid var(--border-light);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-3);
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.priority-info strong {
+  color: var(--text);
+}
+
 .input-search, .select-filter, .input, .textarea {
   background: #ffffff;
   border: 1px solid var(--border);
@@ -417,6 +431,52 @@ select option { background: var(--bg-2); }
 
 .table tbody tr:hover {
   background: var(--bg-4);
+}
+
+.table tbody tr.dragging {
+  opacity: 0.55;
+}
+
+.table tbody tr.row-urgente {
+  background: rgba(255, 77, 90, 0.045);
+}
+
+.table tbody tr.row-atrasado {
+  background: rgba(255, 77, 90, 0.11);
+  box-shadow: inset 3px 0 0 var(--danger);
+}
+
+.table tbody tr.row-atrasado:hover {
+  background: rgba(255, 77, 90, 0.16);
+}
+
+.priority-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 24px;
+  color: var(--text-muted);
+  cursor: grab;
+  font-family: var(--font-mono);
+  user-select: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.priority-btn {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  font-size: 12px;
 }
 
 /* ── BADGES / TAGS ── */
@@ -718,6 +778,23 @@ select option { background: var(--bg-2); }
   text-transform: uppercase;
   color: var(--text-muted);
   font-family: var(--font-mono);
+}
+
+.form-group .checkbox-card {
+  min-height: 36px;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-3);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.form-group .checkbox-card input {
+  accent-color: var(--accent);
 }
 
 .input, .textarea, select.input {
