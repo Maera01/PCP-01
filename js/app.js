@@ -128,6 +128,14 @@ function normalizarSerie(serie) {
   return String(serie || '').trim().replace(/\s+/g, ' ').toUpperCase();
 }
 
+function somarDiasData(dataBase, dias) {
+  if (!dataBase && dataBase !== '') return '';
+  const data = new Date(`${dataBase}T00:00:00`);
+  if (isNaN(data.getTime())) return '';
+  data.setDate(data.getDate() + dias);
+  return data.toISOString().slice(0, 10);
+}
+
 function fmtData(val) {
   if (!val) return '—';
   try {
@@ -561,13 +569,13 @@ const App = {
           <td><strong>${escapar(p.produto)}</strong> ${badgeUrgencia(p)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
           <td>${escapar(p.cliente)||'—'}</td>
-          <td>${corDot(p.cor)} ${escapar(p.cor)||'—'}</td>
-          <td style="text-align:center">${p.quantidade}</td>
-          <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.dataPedido)}</td>
+          <td class="col-hide-notebook">${corDot(p.cor)} ${escapar(p.cor)||'—'}</td>
+          <td class="col-hide-notebook" style="text-align:center">${p.quantidade}</td>
+          <td class="col-hide-notebook" style="font-family:var(--font-mono);font-size:11px">${fmtData(p.dataPedido)}</td>
           <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.prazo)}</td>
           <td>${badgeVencimento(p.statusVencimento, p.diasAtraso, p)}</td>
           <td>${badgeSep(p.statusSep)}</td>
-          <td><span class="badge badge-default">${escapar(etapaAtual(p))}</span></td>
+          <td class="col-hide-notebook"><span class="badge badge-default">${escapar(etapaAtual(p))}</span></td>
           <td>
             <div class="actions-cell">
               ${podeEditar ? `
@@ -1101,6 +1109,21 @@ const App = {
 
   // ── NOVO PEDIDO ──
 
+  calcularPrazoPorDias() {
+    const dataPedido = document.getElementById('np-data-pedido')?.value || '';
+    const diasRaw = document.getElementById('np-prazo-dias')?.value || '';
+    const prazoEl = document.getElementById('np-prazo');
+    if (!prazoEl || !dataPedido || diasRaw === '') return;
+
+    const dias = parseInt(diasRaw, 10);
+    if (Number.isNaN(dias) || dias < 0) {
+      prazoEl.value = '';
+      return;
+    }
+
+    prazoEl.value = somarDiasData(dataPedido, dias);
+  },
+
   salvarPedido(ev) {
     ev.preventDefault();
     const gv   = id => document.getElementById(id)?.value || '';
@@ -1113,6 +1136,11 @@ const App = {
       return;
     }
     const urgente = !!document.getElementById('np-urgente')?.checked;
+    const prazoDias = gv('np-prazo-dias') === '' ? '' : parseInt(gv('np-prazo-dias'), 10);
+    if (prazoDias !== '' && (Number.isNaN(prazoDias) || prazoDias < 0)) {
+      this.toast('Informe uma quantidade de dias de prazo válida.', 'error');
+      return;
+    }
 
     const p = {
       id:               uid(),
@@ -1124,6 +1152,7 @@ const App = {
       situacao:         gv('np-situacao'),
       urgente,
       dataPedido:       gv('np-data-pedido'),
+      prazoDias,
       prazo:            gv('np-prazo'),
       observacao:       gv('np-observacao').trim(),
       observacaoAlmox:  '',
@@ -2134,6 +2163,7 @@ const App = {
     const hoje = new Date().toISOString().slice(0, 10);
     const el   = document.getElementById('np-data-pedido');
     if (el) el.value = hoje;
+    this.calcularPrazoPorDias();
   },
 
   _atualizarFooter() {

@@ -1023,6 +1023,81 @@ select option { background: var(--bg-2); }
   }
 }
 
+@media (max-width: 1920px) {
+  #page-pedidos {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  #page-pedidos .toolbar {
+    align-items: flex-start;
+  }
+
+  #page-pedidos .table {
+    font-size: 11px;
+  }
+
+  #page-pedidos .table th,
+  #page-pedidos .table td {
+    padding: 7px 8px;
+  }
+
+  #page-pedidos .table th:nth-child(2),
+  #page-pedidos .table td:nth-child(2) {
+    max-width: 170px;
+  }
+
+  #page-pedidos .table th:nth-child(4),
+  #page-pedidos .table td:nth-child(4) {
+    max-width: 250px;
+  }
+
+  #page-pedidos .table td:nth-child(2),
+  #page-pedidos .table td:nth-child(4) {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #page-pedidos .col-hide-notebook {
+    display: none;
+  }
+
+  #page-pedidos .priority-info {
+    font-size: 11px;
+    padding: 8px 10px;
+  }
+
+  #page-pedidos .filters {
+    gap: 8px;
+  }
+
+  #page-pedidos .input-search {
+    min-width: 300px;
+  }
+
+  #page-pedidos .select-filter {
+    min-width: 180px;
+  }
+
+  #page-pedidos .badge {
+    font-size: 9px;
+    padding: 3px 7px;
+  }
+
+  #page-pedidos .btn-icon {
+    padding: 4px 6px;
+  }
+
+  #page-pedidos .priority-btn {
+    width: 22px;
+    height: 22px;
+  }
+
+  #page-pedidos .actions-cell {
+    gap: 3px;
+  }
+}
+
 @media (max-width: 900px) {
   .sidebar {
     transform: translateX(-100%);

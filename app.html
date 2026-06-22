@@ -438,8 +438,7 @@
 
 
 <!-- ====== MODAL NOVO PEDIDO ====== -->
-<div class="modal-overlay" id="modal-novo-pedido"
-  onclick="if(event.target===this)App.closeModal('novo-pedido')">
+<div class="modal-overlay" id="modal-novo-pedido">
   <div class="modal" onclick="event.stopPropagation()">
     <div class="modal-header">
       <h2>Novo Pedido</h2>
@@ -498,7 +497,14 @@
           </div>
         <div class="form-group">
           <label>Data do Pedido</label>
-          <input class="input" type="date" id="np-data-pedido"/>
+          <input class="input" type="date" id="np-data-pedido"
+            onchange="App.calcularPrazoPorDias()"/>
+        </div>
+        <div class="form-group">
+          <label>Dias de Prazo</label>
+          <input class="input" type="number" id="np-prazo-dias"
+            min="0" placeholder="Ex: 15"
+            oninput="App.calcularPrazoPorDias()"/>
         </div>
         <div class="form-group">
           <label>Prazo de Produção</label>
