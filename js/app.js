@@ -174,16 +174,8 @@ function corDot(cor) {
   return `<span class="cor-dot ${cls}" title="${cor}"></span>`;
 }
 
-function etapaProducaoIniciada(etapa) {
-  return !!(
-    etapa?.inicio ||
-    etapa?.recebimentoParcial ||
-    etapa?.recebimentoTotal
-  );
-}
-
 function producaoIniciada(pedido) {
-  return ET_KEYS.some(key => etapaProducaoIniciada(pedido?.etapas?.[key]));
+  return ET_KEYS.some(key => !!pedido?.etapas?.[key]?.inicio);
 }
 
 function diasAtrasoPedido(pedido) {
@@ -238,7 +230,7 @@ function etapaAtual(pedido) {
     'montagemMecanica','testeInicial','montagemRevisao','conferencia'
   ];
   for (const k of ordem) {
-    if (etapaProducaoIniciada(pedido.etapas?.[k])) return ET_NOMES[k] || k;
+    if (pedido.etapas?.[k]?.inicio) return ET_NOMES[k] || k;
   }
   return '—';
 }
