@@ -202,8 +202,10 @@ function badgeStatusProducao(pedido) {
   if (pedidoConcluido(pedido)) {
     return '<span class="badge badge-success">Produção concluída</span>';
   }
-  return producaoIniciada(pedido)
-    ? '<span class="badge badge-warning">Em produção</span>'
+
+  const etapa = etapaAtual(pedido);
+  return etapa !== '—'
+    ? `<span class="badge badge-warning">${escapar(etapa)}</span>`
     : '<span class="badge badge-default">Aguardando produção</span>';
 }
 
