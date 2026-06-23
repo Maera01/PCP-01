@@ -480,7 +480,12 @@ const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => 
   }
 };
 
-const salvarPedidosPostgres    = (pedidos)   => salvarRegistrosPostgres(postgresPedidosTable(),    'numero',     pedidos,    numeroPedido);
+const salvarPedidosPostgres    = (pedidos)   => {
+  const pedidosComOrdem = Array.isArray(pedidos)
+    ? pedidos.map((pedido, indice) => ({ ...pedido, ordemFila: indice }))
+    : pedidos;
+  return salvarRegistrosPostgres(postgresPedidosTable(), 'numero', pedidosComOrdem, numeroPedido);
+};
 const salvarExpedicaoPostgres  = (expedicao) => salvarRegistrosPostgres(postgresExpedicaoTable(),  'referencia', expedicao,  referenciaExpedicao);
 const salvarConcluidosPostgres = (concluidos)=> salvarRegistrosPostgres(postgresConcluidosTable(), 'referencia', concluidos, referenciaExpedicao);
 const salvarAuditoriaPostgres  = (logs)      => salvarRegistrosPostgres(postgresAuditoriaTable(),  'acao',       logs,       acaoAuditoria);
@@ -491,7 +496,10 @@ const carregarRegistrosPostgres = async (tbl, orderBy = 'criado_em DESC') => {
   return result.rows.map(row => row.dados);
 };
 
-const carregarPedidosPostgres    = () => carregarRegistrosPostgres(postgresPedidosTable());
+const carregarPedidosPostgres    = () => carregarRegistrosPostgres(
+  postgresPedidosTable(),
+  "CASE WHEN dados ? 'ordemFila' THEN (dados->>'ordemFila')::integer ELSE 2147483647 END ASC, criado_em DESC"
+);
 const carregarExpedicaoPostgres  = () => carregarRegistrosPostgres(postgresExpedicaoTable());
 const carregarConcluidosPostgres = () => carregarRegistrosPostgres(postgresConcluidosTable());
 const carregarAuditoriaPostgres  = () => carregarRegistrosPostgres(postgresAuditoriaTable(), 'criado_em DESC');

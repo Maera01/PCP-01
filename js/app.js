@@ -133,14 +133,33 @@ function somarDiasData(dataBase, dias) {
   const data = new Date(`${dataBase}T00:00:00`);
   if (isNaN(data.getTime())) return '';
   data.setDate(data.getDate() + dias);
-  return data.toISOString().slice(0, 10);
+  return dataLocalISO(data);
+}
+
+function dataLocalISO(data = new Date()) {
+  const ano = data.getFullYear();
+  const mes = String(data.getMonth() + 1).padStart(2, '0');
+  const dia = String(data.getDate()).padStart(2, '0');
+  return `${ano}-${mes}-${dia}`;
+}
+
+function parseDataLocal(val) {
+  if (!val) return null;
+  const texto = String(val);
+  const isoCurto = texto.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (isoCurto) {
+    const [, ano, mes, dia] = isoCurto;
+    return new Date(Number(ano), Number(mes) - 1, Number(dia));
+  }
+  const data = new Date(val);
+  return isNaN(data.getTime()) ? null : data;
 }
 
 function fmtData(val) {
   if (!val) return '—';
   try {
-    const d = new Date(val);
-    if (isNaN(d.getTime())) return val;
+    const d = parseDataLocal(val);
+    if (!d) return val;
     return d.toLocaleDateString('pt-BR');
   } catch(e) { return val; }
 }
@@ -557,6 +576,7 @@ const App = {
             <div class="priority-cell">
               ${podeOrdenar ? `
                 <span class="drag-handle" title="Arrastar para ordenar">↕</span>
+                <button class="btn-icon priority-btn" onclick="App.moverPedidoParaTopo('${escapar(p.id)}')" title="Enviar direto para o topo">⇈</button>
                 <button class="btn-icon priority-btn" onclick="App.moverPedido('${escapar(p.id)}', -1)" title="Subir prioridade">↑</button>
                 <button class="btn-icon priority-btn" onclick="App.moverPedido('${escapar(p.id)}', 1)" title="Descer prioridade">↓</button>
               ` : '<span class="badge badge-default">Admin</span>'}
@@ -598,12 +618,34 @@ const App = {
     return typeof Auth === 'undefined' || Auth.getPerfil() === 'admin';
   },
 
-  salvarOrdemPedidos() {
-    Store.save(this.data);
+  normalizarOrdemPedidos() {
+    (this.data.pedidos || []).forEach((pedido, indice) => {
+      pedido.ordemFila = indice;
+    });
+  },
+
+  async salvarOrdemPedidos() {
+    this.normalizarOrdemPedidos();
+    await Store.save(this.data);
     delete this._pageContentCache['pedidos'];
     delete this._pageContentCache['dashboard'];
     this.filtrarPedidos();
     this.toast('Prioridade dos pedidos atualizada.', 'success');
+  },
+
+  moverPedidoParaTopo(id) {
+    if (!this.podeOrdenarPedidos()) {
+      this.toast('Sem permissão para reorganizar pedidos.', 'error');
+      return;
+    }
+
+    const pedidos = this.data.pedidos || [];
+    const origem = pedidos.findIndex(p => p.id === id);
+    if (origem <= 0) return;
+
+    const [pedido] = pedidos.splice(origem, 1);
+    pedidos.unshift(pedido);
+    this.salvarOrdemPedidos();
   },
 
   moverPedido(id, direcao) {
@@ -1252,7 +1294,7 @@ const App = {
       `Finalizar — ${p.produto}${p.serie ? ' / ' + p.serie : ''}`;
     document.getElementById('fin-equipamento').value = p.produto || '';
     document.getElementById('fin-serie').value = p.serie || '';
-    document.getElementById('fin-data').value = new Date().toISOString().slice(0, 10);
+    document.getElementById('fin-data').value = dataLocalISO();
     document.getElementById('fin-acessorios').value = '';
     // popula select de kits e checklist inicial
     this._finalizarProduto = p.produto || '';
@@ -1292,7 +1334,7 @@ const App = {
       quantidade: p.quantidade || 1,
       cor: p.cor || '',
       obs: (document.getElementById('fin-obs')?.value || '').trim(),
-      dataEntrega: document.getElementById('fin-data')?.value || new Date().toISOString().slice(0, 10),
+      dataEntrega: document.getElementById('fin-data')?.value || dataLocalISO(),
       acessorios,
       checklistCompleto: false,
       autorizadoAdmin: false,
@@ -2251,7 +2293,7 @@ const App = {
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
-    a.download = `controle-producao-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `controle-producao-${dataLocalISO()}.json`;
     a.click();
     URL.revokeObjectURL(url);
     this.toast('Exportação iniciada!', 'success');
@@ -2307,7 +2349,7 @@ const App = {
   },
 
   _setDataHoje() {
-    const hoje = new Date().toISOString().slice(0, 10);
+    const hoje = dataLocalISO();
     const el   = document.getElementById('np-data-pedido');
     if (el) el.value = hoje;
     this.calcularPrazoPorDias();
