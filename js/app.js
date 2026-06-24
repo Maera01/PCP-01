@@ -904,17 +904,17 @@ const App = {
           </div>
           <div class="form-group form-group-full">
             <label>Entrega recebida do Almoxarifado *</label>
-            <select class="input" id="ete-${key}-tipo" ${dis}>
+            <select class="input" id="ete-${key}-tipo" onchange="App.toggleDatasConferencia()" ${dis}>
               <option value="">Selecione...</option>
               <option${e.tipoConferencia === 'Total' ? ' selected' : ''}>Total</option>
               <option${e.tipoConferencia === 'Parcial' ? ' selected' : ''}>Parcial</option>
             </select>
           </div>
-          <div class="form-group">
+          <div class="form-group conferencia-data-parcial">
             <label>Data Recebimento Parcial</label>
             <input class="input" type="date" id="ete-${key}-recebimento-parcial" value="${e.recebimentoParcial||''}" ${dis}/>
           </div>
-          <div class="form-group">
+          <div class="form-group conferencia-data-total">
             <label>Data Recebimento Total</label>
             <input class="input" type="date" id="ete-${key}-recebimento-total" value="${e.recebimentoTotal||''}" ${dis}/>
           </div>
@@ -978,6 +978,7 @@ const App = {
           </div>`;
       }).join('');
       ET_KEYS.forEach(key => this.toggleProblemaEtapa(key));
+      this.toggleDatasConferencia();
     }
 
     // ── Controla abas conforme permissão ──
@@ -1029,6 +1030,15 @@ const App = {
     });
   },
 
+  toggleDatasConferencia() {
+    const tipo = document.getElementById('ete-conferencia-tipo')?.value || '';
+    document.querySelectorAll('.conferencia-data-parcial').forEach(el => {
+      el.style.display = tipo === 'Parcial' ? '' : 'none';
+    });
+    document.querySelectorAll('.conferencia-data-total').forEach(el => {
+      el.style.display = tipo === 'Total' ? '' : 'none';
+    });
+  },
   toggleProblemaEtapa(key) {
     const temProblema = !['', 'Não', 'NaN'].includes(document.getElementById(`ete-${key}-prob`)?.value || '');
     document.querySelectorAll(`.etapa-problema-detalhe[data-etapa="${key}"]`).forEach(el => {
@@ -1052,9 +1062,22 @@ const App = {
         this.toast(`A data fim não pode ser anterior ao início em ${nome}.`, 'error');
         return false;
       }
-      if (key === 'conferencia' && (inicio || fim) && !gv(`ete-${key}-tipo`)) {
-        this.toast('Na conferência, informe se a entrega do Almoxarifado foi total ou parcial.', 'error');
-        return false;
+      if (key === 'conferencia') {
+        const tipo = gv(`ete-${key}-tipo`);
+        const recebimentoParcial = gv(`ete-${key}-recebimento-parcial`);
+        const recebimentoTotal = gv(`ete-${key}-recebimento-total`);
+        if ((recebimentoParcial || recebimentoTotal) && !tipo) {
+          this.toast('Na conferência, informe se a entrega do Almoxarifado foi total ou parcial.', 'error');
+          return false;
+        }
+        if (tipo === 'Parcial' && !recebimentoParcial) {
+          this.toast('Informe a data de recebimento parcial.', 'error');
+          return false;
+        }
+        if (tipo === 'Total' && !recebimentoTotal) {
+          this.toast('Informe a data de recebimento total.', 'error');
+          return false;
+        }
       }
       if (key !== 'conferencia' && !['', 'Não', 'NaN'].includes(problema)) {
         const saida = gv(`ete-${key}-prob-saida`);
@@ -1147,8 +1170,8 @@ const App = {
         const problemaDescricao = (key === 'conferencia')
           ? gv(`ete-${key}-prob-desc`).trim()
           : (!['', 'Não', 'NaN'].includes(problema) ? gv(`ete-${key}-prob-desc`).trim() : '');
-        const recebimentoParcial = key === 'conferencia' ? gv(`ete-${key}-recebimento-parcial`) : '';
-        const recebimentoTotal = key === 'conferencia' ? gv(`ete-${key}-recebimento-total`) : '';
+        const recebimentoParcial = key === 'conferencia' && tipoConferencia === 'Parcial' ? gv(`ete-${key}-recebimento-parcial`) : '';
+        const recebimentoTotal = key === 'conferencia' && tipoConferencia === 'Total' ? gv(`ete-${key}-recebimento-total`) : '';
         const novoTecnico = atual.tecnico || (
           key === 'conferencia'
             ? ((recebimentoParcial || recebimentoTotal) && !atual.recebimentoParcial && !atual.recebimentoTotal ? tecnicoAtual : '')
