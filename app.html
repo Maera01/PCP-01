@@ -141,7 +141,7 @@
           <button class="modal-close" onclick="App.closeModal('produtos')">✕</button>
         </div>
         <div class="modal-body">
-          <div style="display:flex;gap:16px">
+          <div class="produtos-layout">
             <div style="flex:1;max-width:460px">
               <div id="produtos-list"></div>
             </div>
@@ -150,13 +150,50 @@
                 <input type="hidden" id="produto-original" />
                 <div class="form-group">
                   <label>Nome do Produto</label>
-                  <input class="input" id="produto-nome" placeholder="Ex: ASE100" required />
+                  <input class="input" id="produto-nome" placeholder="Ex: ASE100" oninput="App.renderProdutoComponentes()" required />
                 </div>
                 <div style="display:flex;justify-content:flex-end;gap:8px">
                   <button type="button" class="btn btn-secondary" onclick="App.resetProdutoForm()">Limpar</button>
                   <button type="submit" class="btn btn-primary">Salvar Produto</button>
                 </div>
               </form>
+              <div class="component-panel">
+                <div class="edit-section-title">Estrutura / Componentes</div>
+                <div class="component-help" id="produto-componentes-info">
+                  Selecione ou salve um produto para cadastrar os componentes. O checklist sera copiado para cada novo pedido.
+                </div>
+                <div class="component-import-row">
+                  <label class="btn btn-secondary" for="produto-comp-importar">Importar planilha</label>
+                  <input id="produto-comp-importar" type="file" accept=".xls,.xml" onchange="App.importarEstruturaProdutoArquivo(event)" hidden />
+                  <span>Importa niveis 1.1 e 1.1.1; ignora 1.1.1.1.</span>
+                </div>
+                <div class="component-form-grid">
+                  <div class="form-group component-code">
+                    <label>Codigo</label>
+                    <input class="input" id="produto-comp-codigo" placeholder="Ex: CJT00031_01" />
+                  </div>
+                  <div class="form-group component-description">
+                    <label>Componente</label>
+                    <input class="input" id="produto-comp-desc" placeholder="Ex: Kit Gabinete Inferior JAU200" />
+                  </div>
+                  <div class="form-group component-parent">
+                    <label>Dentro de</label>
+                    <select class="input" id="produto-comp-parent">
+                      <option value="">Produto principal</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label>Qtd</label>
+                    <input class="input" id="produto-comp-qtd" type="number" min="0" step="0.01" value="1" />
+                  </div>
+                  <div class="form-group">
+                    <label>Un.</label>
+                    <input class="input" id="produto-comp-unidade" value="UN" />
+                  </div>
+                  <button type="button" class="btn btn-primary component-add-btn" onclick="App.adicionarComponenteProduto()">Adicionar</button>
+                </div>
+                <div id="produto-componentes-list" class="component-list"></div>
+              </div>
             </div>
           </div>
         </div>
@@ -348,12 +385,20 @@
             <label>Observação Almoxarifado</label>
             <textarea class="textarea" id="ed-obs-almox" rows="3"></textarea>
           </div>
+          <div class="form-group form-group-full">
+            <label>Checklist de Componentes - Almoxarifado</label>
+            <div id="ed-componentes-almox" class="component-checklist-box"></div>
+          </div>
         </div>
       </div>
 
       <!-- PAINEL PRODUÇÃO -->
       <div class="edit-panel" id="panel-producao"
         style="padding:22px;display:none;overflow-y:auto;flex:1">
+        <details class="component-section-toggle">
+          <summary>Conferencia de Componentes</summary>
+          <div id="ed-componentes-producao" class="component-checklist-box"></div>
+        </details>
         <div class="edit-section-title">Etapas de Produção</div>
         <div id="etapas-edit-form"></div>
       </div>

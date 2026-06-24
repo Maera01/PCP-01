@@ -72,6 +72,7 @@ const Store = {
       expedicao: SEED_EXPEDICAO,
       produtos:  PRODUTOS.slice(),
       kits:      kits,
+      produtoEstruturas: [],
       logs:      [],
       criadoEm:  new Date().toISOString()
     };
@@ -101,6 +102,7 @@ const Store = {
 
     if (!data.logs) data.logs = [];
     if (!data.kits) data.kits = [];
+    if (!Array.isArray(data.produtoEstruturas)) data.produtoEstruturas = [];
     if (!Array.isArray(data.produtos) || !data.produtos.length) data.produtos = PRODUTOS.slice();
     if (!data.pedidos) data.pedidos = [];
     if (!data.expedicao) data.expedicao = [];
@@ -113,6 +115,7 @@ const Store = {
       this.save(data);
     }
     if (!data.logs) data.logs = [];
+    if (!Array.isArray(data.produtoEstruturas)) data.produtoEstruturas = [];
     if (!Array.isArray(data.produtos) || !data.produtos.length) data.produtos = PRODUTOS.slice();
     return data;
   }
@@ -174,8 +177,16 @@ function corDot(cor) {
   return `<span class="cor-dot ${cls}" title="${cor}"></span>`;
 }
 
+function etapaProducaoIniciada(etapa) {
+  return !!(
+    etapa?.inicio ||
+    etapa?.recebimentoParcial ||
+    etapa?.recebimentoTotal
+  );
+}
+
 function producaoIniciada(pedido) {
-  return ET_KEYS.some(key => !!pedido?.etapas?.[key]?.inicio);
+  return ET_KEYS.some(key => etapaProducaoIniciada(pedido?.etapas?.[key]));
 }
 
 function diasAtrasoPedido(pedido) {
@@ -232,7 +243,7 @@ function etapaAtual(pedido) {
     'montagemMecanica','testeInicial','montagemRevisao','conferencia'
   ];
   for (const k of ordem) {
-    if (pedido.etapas?.[k]?.inicio) return ET_NOMES[k] || k;
+    if (etapaProducaoIniciada(pedido.etapas?.[k])) return ET_NOMES[k] || k;
   }
   return '—';
 }
@@ -809,6 +820,10 @@ const App = {
           <div class="obs-box">${escapar(p.observacao)}</div>
         </div>` : ''}
       <div class="detail-section">
+        <h3>Checklist de Componentes</h3>
+        <div class="component-checklist-box">${this.renderChecklistComponentesPedido(p, 'leitura', true)}</div>
+      </div>
+      <div class="detail-section">
         <h3>Etapas de Produção</h3>
         <div class="etapas-grid">${etapasHtml}</div>
       </div>`;
@@ -855,6 +870,17 @@ const App = {
     sv('ed-obs-comercial').value = p.observacao      || '';
     sv('ed-obs-almox').value  = p.observacaoAlmox    || '';
     this.toggleCamposPecas();
+    this.garantirChecklistComponentesPedido(p);
+    const almoxBox = document.getElementById('ed-componentes-almox');
+    if (almoxBox) {
+      const podeAlmChecklist = typeof Auth === 'undefined' || Auth.pode('editarAlmoxarifado');
+      almoxBox.innerHTML = this.renderChecklistComponentesPedido(p, 'almoxarifado', !podeAlmChecklist);
+    }
+    const prodBox = document.getElementById('ed-componentes-producao');
+    if (prodBox) {
+      const podeProdChecklist = typeof Auth === 'undefined' || Auth.pode('editarProducao');
+      prodBox.innerHTML = this.renderChecklistComponentesPedido(p, 'producao', !podeProdChecklist);
+    }
 
     // ── PRODUÇÃO — monta etapas ──
     const form = document.getElementById('etapas-edit-form');
@@ -1060,6 +1086,8 @@ const App = {
     if (this._editIdx === null) return;
     const p  = this.data.pedidos[this._editIdx];
     const gv = id => document.getElementById(id)?.value || '';
+    const produtoAnterior = p.produto;
+    let produtoAlterado = false;
 
     // Salva COMERCIAL (se tiver permissão)
     const podeCom = typeof Auth === 'undefined' || Auth.pode('editarComercial');
@@ -1073,6 +1101,10 @@ const App = {
       p.dataPedido = gv('ed-datapedido');
       p.prazo      = gv('ed-prazo');
       p.observacao = gv('ed-obs-comercial-edit').trim();
+      produtoAlterado = produtoAnterior !== p.produto;
+      if (produtoAlterado) {
+        p.componentesChecklist = this.criarChecklistComponentes(p.produto);
+      }
     }
 
     // Salva ALMOXARIFADO (se tiver permissão)
@@ -1095,6 +1127,7 @@ const App = {
       p.dataRetornoPecas   = p.dataEntregaParcial ? gv('ed-dataretornopecas') : '';
       p.pecasPedidas       = p.dataEntregaParcial ? gv('ed-pecaspedidas').trim() : '';
       p.observacaoAlmox    = gv('ed-obs-almox').trim();
+      if (!produtoAlterado) this.salvarChecklistComponentesPedido(p, 'almoxarifado');
     }
 
     // Salva PRODUÇÃO (se tiver permissão)
@@ -1134,6 +1167,7 @@ const App = {
           tecnico: novoTecnico
         };
       });
+      if (!produtoAlterado) this.salvarChecklistComponentesPedido(p, 'producao');
     }
 
     Store.save(this.data);
@@ -1231,6 +1265,7 @@ const App = {
       dataPedidoPecas:    '',
       dataRetornoPecas:   '',
       pecasPedidas:       '',
+      componentesChecklist: this.criarChecklistComponentes(prod),
       etapas: {
         conferencia:      etapaVazia(),
         montagemRevisao:  etapaVazia(),
@@ -1842,6 +1877,393 @@ const App = {
       </label>`).join('');
   },
 
+  getProdutoFormAtual() {
+    return (document.getElementById('produto-original')?.value || document.getElementById('produto-nome')?.value || '').trim();
+  },
+
+  getEstruturaProduto(produto) {
+    if (!produto) return null;
+    if (!Array.isArray(this.data.produtoEstruturas)) this.data.produtoEstruturas = [];
+    return this.data.produtoEstruturas.find(e => String(e.produto || '').toLowerCase() === String(produto).toLowerCase()) || null;
+  },
+
+  getComponentesProduto(produto) {
+    return (this.getEstruturaProduto(produto)?.itens || []).slice();
+  },
+
+  ordenarComponentesArvore(itens = []) {
+    const lista = Array.isArray(itens) ? itens : [];
+    const ids = new Set(lista.map(item => item.id).filter(Boolean));
+    const filhosPorPai = lista.reduce((acc, item) => {
+      const pai = item.parentId && ids.has(item.parentId) ? item.parentId : '';
+      if (!acc[pai]) acc[pai] = [];
+      acc[pai].push(item);
+      return acc;
+    }, {});
+    const ordenados = [];
+    const visitar = (parentId, nivel) => {
+      (filhosPorPai[parentId] || []).forEach(item => {
+        const nivelFinal = item.parentId ? nivel : (parseInt(item.nivel, 10) || nivel);
+        ordenados.push({ ...item, nivel: nivelFinal });
+        visitar(item.id, nivelFinal + 1);
+      });
+    };
+    visitar('', 0);
+    return ordenados;
+  },
+
+  setComponentesProduto(produto, itens) {
+    if (!produto) return;
+    if (!Array.isArray(this.data.produtoEstruturas)) this.data.produtoEstruturas = [];
+    const idx = this.data.produtoEstruturas.findIndex(e => String(e.produto || '').toLowerCase() === String(produto).toLowerCase());
+    const registro = { produto, itens: Array.isArray(itens) ? itens : [] };
+    if (idx >= 0) this.data.produtoEstruturas[idx] = registro;
+    else this.data.produtoEstruturas.push(registro);
+  },
+
+  criarChecklistComponentes(produto) {
+    return this.ordenarComponentesArvore(this.getComponentesProduto(produto)).map(item => ({
+      id: uid(),
+      origemId: item.id || '',
+      parentId: item.parentId || '',
+      codigo: item.codigo || '',
+      descricao: item.descricao || '',
+      quantidade: item.quantidade || 1,
+      unidade: item.unidade || 'UN',
+      nivel: parseInt(item.nivel, 10) || 0,
+      separado: false,
+      conferido: false,
+      observacao: ''
+    }));
+  },
+
+  garantirChecklistComponentesPedido(pedido) {
+    if (!pedido) return [];
+    const estrutura = this.getComponentesProduto(pedido.produto);
+    if (!Array.isArray(pedido.componentesChecklist) || (!pedido.componentesChecklist.length && estrutura.length)) {
+      pedido.componentesChecklist = this.criarChecklistComponentes(pedido.produto);
+    }
+    return pedido.componentesChecklist;
+  },
+
+  renderProdutoComponentes(produto = this.getProdutoFormAtual()) {
+    const info = document.getElementById('produto-componentes-info');
+    const container = document.getElementById('produto-componentes-list');
+    if (!container) return;
+    if (!produto) {
+      if (info) info.textContent = 'Informe ou selecione um produto para cadastrar os componentes.';
+      container.innerHTML = '';
+      this.renderProdutoComponenteParentSelect([]);
+      return;
+    }
+
+    if (info) info.textContent = `Componentes cadastrados para ${produto}.`;
+    const itens = this.getComponentesProduto(produto);
+    const itensOrdenados = this.ordenarComponentesArvore(itens);
+    this.renderProdutoComponenteParentSelect(itensOrdenados);
+    if (!itens.length) {
+      container.innerHTML = '<div class="empty-state">Nenhum componente cadastrado para este produto.</div>';
+      return;
+    }
+
+    container.innerHTML = itensOrdenados.map(item => `
+      <div class="component-tree-row">
+        <small>${escapar(item.codigo) || '�'}</small>
+        <div style="padding-left:${Math.min((parseInt(item.nivel, 10) || 0) * 18, 90)}px">
+          ${parseInt(item.nivel, 10) > 0 ? '-> ' : ''}<strong>${escapar(item.descricao)}</strong>
+        </div>
+        <span>${escapar(item.quantidade)}</span>
+        <small>${escapar(item.unidade || 'UN')}</small>
+        <button type="button" class="btn-icon danger" onclick="App.removerComponenteProduto('${escapar(produto)}','${escapar(item.id)}')" title="Remover">x</button>
+      </div>`).join('');
+  },
+
+  renderProdutoComponenteParentSelect(itens = []) {
+    const select = document.getElementById('produto-comp-parent');
+    if (!select) return;
+    const atual = select.value;
+    select.innerHTML = '<option value="">Produto principal</option>' + itens.map(item => {
+      const nivel = parseInt(item.nivel, 10) || 0;
+      const prefixo = nivel > 0 ? '� '.repeat(Math.min(nivel, 4)) : '';
+      const label = `${prefixo}${item.codigo ? item.codigo + ' - ' : ''}${item.descricao}`;
+      return `<option value="${escapar(item.id)}">${escapar(label)}</option>`;
+    }).join('');
+    if ([...select.options].some(opt => opt.value === atual)) select.value = atual;
+  },
+
+  extrairProdutoDaPlanilha(rows = []) {
+    const linhaComponente = rows.find(row => String(row[0] || '').trim() === 'Componente:');
+    const texto = linhaComponente ? String(rows[rows.indexOf(linhaComponente) + 1]?.[0] || '') : '';
+    const matches = texto.match(/\b[A-Z]{2,}\d{2,}\b/g);
+    return matches?.[matches.length - 1] || '';
+  },
+
+  lerLinhasExcelXml(texto) {
+    const xml = new DOMParser().parseFromString(texto, 'text/xml');
+    if (xml.querySelector('parsererror')) throw new Error('Arquivo XML invalido.');
+    return [...xml.getElementsByTagNameNS('urn:schemas-microsoft-com:office:spreadsheet', 'Row')].map(row => {
+      const valores = [];
+      let col = 1;
+      [...row.getElementsByTagNameNS('urn:schemas-microsoft-com:office:spreadsheet', 'Cell')].forEach(cell => {
+        const idx = parseInt(cell.getAttributeNS('urn:schemas-microsoft-com:office:spreadsheet', 'Index') || '', 10);
+        if (idx) {
+          while (col < idx) { valores.push(''); col += 1; }
+        }
+        const data = cell.getElementsByTagNameNS('urn:schemas-microsoft-com:office:spreadsheet', 'Data')[0];
+        valores.push((data?.textContent || '').trim());
+        col += 1;
+      });
+      return valores;
+    });
+  },
+
+  codigoItemPlanilha(row) {
+    return String(row?.[2] || '').replace(/\./g, '').trim();
+  },
+
+  identificacaoItemPlanilha(row) {
+    return String(row?.[5] || '').trim();
+  },
+  parseQuantidadeComponente(valor) {
+    const texto = String(valor || '1').trim();
+    const normalizado = texto.includes(',') ? texto.replace(/\./g, '').replace(',', '.') : texto;
+    const numero = parseFloat(normalizado);
+    return Number.isNaN(numero) || numero <= 0 ? 1 : numero;
+  },
+
+  importarComponentesDaPlanilha(texto, produtoInformado = '') {
+    const rows = this.lerLinhasExcelXml(texto);
+    const produto = produtoInformado || this.extrairProdutoDaPlanilha(rows);
+    const linhas = rows.filter(row => /^\d+(\.\d+)*$/.test(String(row[1] || '').trim()));
+    const itens = [];
+    const porNivel = new Map();
+    const principaisPmt = new Set();
+
+    linhas.forEach(row => {
+      const nivel = String(row[1] || '').trim();
+      const partes = nivel.split('.');
+      if (partes.length !== 2) return;
+      const codigo = this.codigoItemPlanilha(row);
+      const descricao = String(row[7] || '').trim();
+      if (!descricao) return;
+      const item = {
+        id: uid(),
+        parentId: '',
+        codigo,
+        descricao,
+        quantidade: this.parseQuantidadeComponente(row[13]),
+        unidade: String(row[18] || row[15] || 'UN').trim() || 'UN',
+        nivel: 0
+      };
+      itens.push(item);
+      porNivel.set(nivel, item);
+      if (this.identificacaoItemPlanilha(row).toUpperCase().startsWith('PMT')) principaisPmt.add(nivel);
+    });
+
+    linhas.forEach(row => {
+      const nivel = String(row[1] || '').trim();
+      const partes = nivel.split('.');
+      if (partes.length !== 3) return;
+      const nivelPai = `${partes[0]}.${partes[1]}`;
+      const pai = porNivel.get(nivelPai);
+      if (!pai || principaisPmt.has(nivelPai)) return;
+      const codigo = this.codigoItemPlanilha(row);
+      const descricao = String(row[7] || '').trim();
+      if (!descricao) return;
+      itens.push({
+        id: uid(),
+        parentId: pai.id,
+        codigo,
+        descricao,
+        quantidade: this.parseQuantidadeComponente(row[13]),
+        unidade: String(row[18] || row[15] || 'UN').trim() || 'UN',
+        nivel: 1
+      });
+    });
+
+    return { produto, itens: this.ordenarComponentesArvore(itens) };
+  },
+
+  async importarEstruturaProdutoArquivo(ev) {
+    const input = ev.target;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const texto = await file.text();
+      const produtoTela = this.getProdutoFormAtual();
+      const { produto, itens } = this.importarComponentesDaPlanilha(texto, produtoTela);
+      if (!produto) {
+        this.toast('Informe o produto antes de importar a planilha.', 'error');
+        return;
+      }
+      if (!itens.length) {
+        this.toast('Nenhum componente compativel encontrado na planilha.', 'error');
+        return;
+      }
+      const existentes = this.getComponentesProduto(produto).length;
+      if (existentes && !confirm(`Substituir os ${existentes} componentes atuais de ${produto} pelos ${itens.length} itens importados?`)) return;
+
+      if (!this.getProdutos().some(p => p.toLowerCase() === produto.toLowerCase())) {
+        this.data.produtos = [...this.getProdutos(), produto];
+      }
+      document.getElementById('produto-original').value = produto;
+      document.getElementById('produto-nome').value = produto;
+      this.setComponentesProduto(produto, itens);
+      Store.save(this.data);
+      this.renderProdutosList();
+      this.renderProdutoComponentes(produto);
+      this._populateProdutos();
+      this.toast(`${itens.length} componentes importados para ${produto}.`, 'success');
+    } catch (err) {
+      console.error(err);
+      this.toast('Nao foi possivel importar esta planilha.', 'error');
+    } finally {
+      input.value = '';
+    }
+  },
+  adicionarComponenteProduto() {
+    const produto = this.getProdutoFormAtual();
+    if (!produto) {
+      this.toast('Informe o nome do produto antes de adicionar componentes.', 'error');
+      return;
+    }
+
+    const codigo = (document.getElementById('produto-comp-codigo')?.value || '').trim();
+    const descricao = (document.getElementById('produto-comp-desc')?.value || '').trim();
+    const quantidadeRaw = document.getElementById('produto-comp-qtd')?.value || '1';
+    const quantidade = parseFloat(String(quantidadeRaw).replace(',', '.'));
+    const unidade = (document.getElementById('produto-comp-unidade')?.value || 'UN').trim();
+    const parentId = document.getElementById('produto-comp-parent')?.value || '';
+
+    if (!descricao || Number.isNaN(quantidade) || quantidade <= 0) {
+      this.toast('Informe descrição e quantidade válida para o componente.', 'error');
+      return;
+    }
+
+    const itens = this.getComponentesProduto(produto);
+    const pai = parentId ? itens.find(item => item.id === parentId) : null;
+    itens.push({
+      id: uid(),
+      parentId,
+      codigo,
+      descricao,
+      quantidade,
+      unidade,
+      nivel: pai ? ((parseInt(pai.nivel, 10) || 0) + 1) : 0
+    });
+    this.setComponentesProduto(produto, itens);
+    Store.save(this.data);
+    this.renderProdutoComponentes(produto);
+    ['produto-comp-codigo', 'produto-comp-desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const qtd = document.getElementById('produto-comp-qtd');
+    if (qtd) qtd.value = '1';
+    this.toast('Componente adicionado.', 'success');
+  },
+
+  removerComponenteProduto(produto, id) {
+    const itensAtuais = this.getComponentesProduto(produto);
+    const removerIds = new Set([id]);
+    let mudou = true;
+    while (mudou) {
+      mudou = false;
+      itensAtuais.forEach(item => {
+        if (item.parentId && removerIds.has(item.parentId) && !removerIds.has(item.id)) {
+          removerIds.add(item.id);
+          mudou = true;
+        }
+      });
+    }
+    const itens = itensAtuais.filter(item => !removerIds.has(item.id));
+    this.setComponentesProduto(produto, itens);
+    Store.save(this.data);
+    this.renderProdutoComponentes(produto);
+  },
+
+  renderChecklistComponentesPedido(pedido, modo = 'almoxarifado', disabled = false) {
+    const itens = this.garantirChecklistComponentesPedido(pedido);
+    if (!itens.length) {
+      return '<div class="empty-state">Nenhuma estrutura cadastrada para este produto.</div>';
+    }
+    const dis = disabled ? 'disabled' : '';
+    const filhosPorPai = itens.reduce((acc, item, idx) => {
+      const pai = item.parentId || '';
+      if (!acc[pai]) acc[pai] = [];
+      acc[pai].push({ item, idx });
+      return acc;
+    }, {});
+    const renderLinha = ({ item, idx }, isFilho = false) => {
+      const conferido = modo === 'almoxarifado' ? '' : `
+        <label><input type="checkbox" class="comp-conferido-check" data-modo="${modo}" data-idx="${idx}" ${item.conferido ? 'checked' : ''} ${dis} onchange="App.aplicarCheckPaiComponentes(this, 'conferido')"/> Conferido</label>`;
+      return `
+      <div class="component-check-row component-check-row-${modo} ${isFilho ? 'component-child-row' : 'component-parent-row'}" data-parent="${escapar(item.parentId || '')}">
+        <small>${escapar(item.codigo) || '�'}</small>
+        <div class="component-check-name" style="padding-left:${isFilho ? 18 : 0}px">
+          ${isFilho ? '-> ' : ''}<strong>${escapar(item.descricao)}</strong>
+        </div>
+        <span>${escapar(item.quantidade)}</span>
+        <small>${escapar(item.unidade || 'UN')}</small>
+        <label><input type="checkbox" class="comp-separado-check" data-modo="${modo}" data-idx="${idx}" ${item.separado ? 'checked' : ''} ${modo === 'producao' ? 'disabled' : dis} onchange="App.aplicarCheckPaiComponentes(this, 'separado')"/> Separado</label>
+        ${conferido}
+      </div>`;
+    };
+
+    const grupos = (filhosPorPai[''] || []).map(grupo => {
+      const listaFilhos = filhosPorPai[grupo.item.origemId || grupo.item.id] || [];
+      const filhosHtml = listaFilhos.map(filho => renderLinha(filho, true)).join('');
+      const botao = listaFilhos.length
+        ? `<button type="button" class="component-toggle" onclick="App.toggleComponentesFilhos(this)">+</button>`
+        : '<span class="component-toggle-placeholder"></span>';
+      return `
+        <div class="component-group">
+          <div class="component-group-head">
+            ${botao}
+            <div class="component-group-main">${renderLinha(grupo, false)}</div>
+          </div>
+          <div class="component-children" style="display:none">${filhosHtml}</div>
+        </div>`;
+    }).join('');
+
+    const toolbar = modo === 'almoxarifado' && !disabled
+      ? `<div class="component-actions"><button type="button" class="btn btn-secondary" onclick="App.alternarTodosComponentesSeparados()">Marcar/desmarcar separados</button></div>`
+      : '';
+    return toolbar + grupos;
+  },
+
+  alternarTodosComponentesSeparados() {
+    const checks = [...document.querySelectorAll('#ed-componentes-almox .comp-separado-check:not(:disabled)')];
+    const marcar = checks.some(input => !input.checked);
+    checks.forEach(input => { input.checked = marcar; });
+  },
+
+  aplicarCheckPaiComponentes(input, tipo) {
+    const group = input.closest('.component-group');
+    if (!group || !group.querySelector('.component-group-main')?.contains(input)) return;
+    const selector = tipo === 'conferido' ? '.comp-conferido-check' : '.comp-separado-check';
+    group.querySelectorAll(`.component-children ${selector}:not(:disabled)`).forEach(child => {
+      child.checked = input.checked;
+    });
+  },
+  toggleComponentesFilhos(btn) {
+    const group = btn.closest('.component-group');
+    const children = group?.querySelector('.component-children');
+    if (!children) return;
+    const aberto = children.style.display !== 'none';
+    children.style.display = aberto ? 'none' : '';
+    btn.textContent = aberto ? '+' : '-';
+  },
+
+  salvarChecklistComponentesPedido(pedido, modo) {
+    if (!pedido || !Array.isArray(pedido.componentesChecklist)) return;
+    pedido.componentesChecklist.forEach((item, idx) => {
+      if (modo === 'almoxarifado') {
+        item.separado = !!document.querySelector(`.comp-separado-check[data-modo="almoxarifado"][data-idx="${idx}"]`)?.checked;
+      }
+      if (modo === 'producao') {
+        item.conferido = !!document.querySelector(`.comp-conferido-check[data-modo="producao"][data-idx="${idx}"]`)?.checked;
+      }
+    });
+  },
+
   getProdutos() {
     const produtos = Array.isArray(this.data?.produtos) ? this.data.produtos : [];
     return [...new Set(produtos.map(p => String(p || '').trim()).filter(Boolean))]
@@ -1851,6 +2273,7 @@ const App = {
   openProdutosModal() {
     this.resetProdutoForm();
     this.renderProdutosList();
+    this.renderProdutoComponentes();
     this.openModal('produtos');
   },
 
@@ -1894,6 +2317,10 @@ const App = {
       ? produtos.map(p => p === original ? nome : p)
       : [...produtos, nome];
     this.data.produtos = this.getProdutos();
+    if (original && original !== nome) {
+      const estrutura = this.getEstruturaProduto(original);
+      if (estrutura) estrutura.produto = nome;
+    }
 
     Store.save(this.data);
     this.log(original ? 'Editar Produto' : 'Criar Produto', { produto: nome, original });
@@ -1906,6 +2333,7 @@ const App = {
   editarProduto(produto) {
     document.getElementById('produto-original').value = produto;
     document.getElementById('produto-nome').value = produto;
+    this.renderProdutoComponentes(produto);
     document.getElementById('produto-nome').focus();
   },
 
@@ -1919,6 +2347,7 @@ const App = {
     }
     if (!confirm(`Excluir o produto ${produto}?`)) return;
     this.data.produtos = this.getProdutos().filter(p => p !== produto);
+    this.data.produtoEstruturas = (this.data.produtoEstruturas || []).filter(e => e.produto !== produto);
     Store.save(this.data);
     this.log('Excluir Produto', { produto });
     this.renderProdutosList();
@@ -1929,6 +2358,14 @@ const App = {
   resetProdutoForm() {
     document.getElementById('produto-original').value = '';
     document.getElementById('produto-nome').value = '';
+    ['produto-comp-codigo', 'produto-comp-desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+    const qtd = document.getElementById('produto-comp-qtd');
+    if (qtd) qtd.value = '1';
+    const unidade = document.getElementById('produto-comp-unidade');
+    if (unidade) unidade.value = 'UN';
+    const parent = document.getElementById('produto-comp-parent');
+    if (parent) parent.value = '';
+    this.renderProdutoComponentes();
   },
 
   // ── KITS MANAGEMENT ──
