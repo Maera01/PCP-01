@@ -2783,6 +2783,7 @@ const App = {
   closeModal(nome) {
     const el = document.getElementById(`modal-${nome}`);
     if (el) el.classList.remove('open');
+    if (this._updatePendingData) this.mostrarAvisoAtualizacao();
   },
 
   // ── TOAST ──
@@ -2847,15 +2848,31 @@ const App = {
       aviso.id = 'aviso-atualizacao';
       aviso.className = 'update-banner';
       aviso.innerHTML = `
-        <div class="update-banner__text">Existem atualizacoes feitas por outro usuario.</div>
+        <div class="update-banner__text" id="aviso-atualizacao-texto"></div>
         <div class="update-banner__actions">
           <button type="button" class="btn-secondary btn-sm" onclick="App.esconderAvisoAtualizacao()">Depois</button>
-          <button type="button" class="btn-primary btn-sm" onclick="App.atualizarAgora()">Atualizar agora</button>
+          <button type="button" class="btn-primary btn-sm" id="btn-atualizar-agora" onclick="App.atualizarAgora()">Atualizar agora</button>
         </div>
       `;
       document.body.appendChild(aviso);
     }
+    this.atualizarEstadoAvisoAtualizacao();
     aviso.classList.add('show');
+  },
+
+  atualizarEstadoAvisoAtualizacao() {
+    const texto = document.getElementById('aviso-atualizacao-texto');
+    const botao = document.getElementById('btn-atualizar-agora');
+    const bloqueado = this.modalAberto();
+    if (texto) {
+      texto.textContent = bloqueado
+        ? 'Existem atualizacoes novas. Salve ou cancele sua edicao antes de atualizar.'
+        : 'Existem atualizacoes feitas por outro usuario. Voce ja pode atualizar os dados.';
+    }
+    if (botao) {
+      botao.disabled = bloqueado;
+      botao.title = bloqueado ? 'Feche a janela aberta antes de atualizar.' : '';
+    }
   },
 
   esconderAvisoAtualizacao() {
@@ -2864,6 +2881,11 @@ const App = {
   },
 
   atualizarAgora() {
+    if (this.modalAberto()) {
+      this.mostrarAvisoAtualizacao();
+      this.toast('Salve ou cancele a edicao aberta antes de atualizar.', 'warning');
+      return;
+    }
     if (this._updatePendingData) {
       this.aplicarDadosAtualizados(this._updatePendingData);
       return;
