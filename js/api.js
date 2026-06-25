@@ -64,7 +64,7 @@ const API = {
   },
 
   // ── Salvar dados (servidor + localStorage) ──
-  async saveData(data) {
+  async saveData(data, options = {}) {
     // Sempre salva localmente
     try {
       localStorage.setItem('controle_producao_v2', JSON.stringify(data));
@@ -82,7 +82,7 @@ const API = {
         const res = await fetch(`${this.BASE_URL}/data`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ data })
+          body: JSON.stringify({ data, atualizarOrdem: !!options.atualizarOrdem })
         });
         if (res.ok) {
           console.log('☁️ Dados sincronizados com servidor');

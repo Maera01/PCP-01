@@ -480,10 +480,42 @@ const salvarRegistrosPostgres = async (tbl, labelColumn, registros, labelFn) => 
   }
 };
 
-const salvarPedidosPostgres    = (pedidos)   => {
-  const pedidosComOrdem = Array.isArray(pedidos)
-    ? pedidos.map((pedido, indice) => ({ ...pedido, ordemFila: indice }))
-    : pedidos;
+const carregarOrdemPedidosPostgres = async () => {
+  const result = await pool.query(
+    `SELECT id,
+            CASE
+              WHEN dados ? 'ordemFila' THEN (dados->>'ordemFila')::integer
+              ELSE 2147483647
+            END AS ordem
+       FROM ${postgresPedidosTable()}`
+  );
+  return new Map(result.rows.map(row => [String(row.id), Number(row.ordem)]));
+};
+
+const salvarPedidosPostgres = async (pedidos, options = {}) => {
+  if (!Array.isArray(pedidos)) {
+    return salvarRegistrosPostgres(postgresPedidosTable(), 'numero', pedidos, numeroPedido);
+  }
+
+  const atualizarOrdem = options.atualizarOrdem === true;
+  let pedidosComOrdem;
+
+  if (atualizarOrdem) {
+    pedidosComOrdem = pedidos.map((pedido, indice) => ({ ...pedido, ordemFila: indice }));
+  } else {
+    const ordemAtual = await carregarOrdemPedidosPostgres();
+    const ordensValidas = Array.from(ordemAtual.values()).filter(Number.isFinite);
+    let proximaOrdem = ordensValidas.length ? Math.max(...ordensValidas) + 1 : 0;
+
+    pedidosComOrdem = pedidos.map((pedido) => {
+      const ordemExistente = ordemAtual.get(String(pedido.id));
+      if (Number.isFinite(ordemExistente)) {
+        return { ...pedido, ordemFila: ordemExistente };
+      }
+      return { ...pedido, ordemFila: proximaOrdem++ };
+    });
+  }
+
   return salvarRegistrosPostgres(postgresPedidosTable(), 'numero', pedidosComOrdem, numeroPedido);
 };
 const salvarExpedicaoPostgres  = (expedicao) => salvarRegistrosPostgres(postgresExpedicaoTable(),  'referencia', expedicao,  referenciaExpedicao);
@@ -513,9 +545,9 @@ const dividirExpedicao = (expedicao = []) => {
   };
 };
 
-const salvarAreasPostgres = async (data) => {
+const salvarAreasPostgres = async (data, options = {}) => {
   const { expedicaoAberta, concluidos } = dividirExpedicao(data?.expedicao || []);
-  await salvarPedidosPostgres(data?.pedidos || []);
+  await salvarPedidosPostgres(data?.pedidos || [], options);
   await salvarExpedicaoPostgres(expedicaoAberta);
   await salvarConcluidosPostgres(concluidos);
   await salvarAuditoriaPostgres(data?.logs || []);
@@ -523,7 +555,7 @@ const salvarAreasPostgres = async (data) => {
 };
 
 // ── SALVAR/CARREGAR DADOS (dashboard + áreas) ──
-const saveData = (key, value) => {
+const saveData = (key, value, options = {}) => {
   if (USE_POSTGRES) {
     const valueToStore = key === 'app_data' && value
       ? { ...value, pedidos: [], expedicao: [], logs: [], kits: [] }
@@ -536,7 +568,7 @@ const saveData = (key, value) => {
        ON CONFLICT (data_key) DO UPDATE SET data_value = EXCLUDED.data_value, updated_at = CURRENT_TIMESTAMP`,
       [key, json]
     ).then(async () => {
-      if (key === 'app_data') await salvarAreasPostgres(value || {});
+      if (key === 'app_data') await salvarAreasPostgres(value || {}, options);
     });
   }
 
@@ -606,7 +638,7 @@ app.get('/api/data', async (req, res) => {
 
 app.post('/api/data', async (req, res) => {
   try {
-    const { data } = req.body;
+    const { data, atualizarOrdem } = req.body;
     if (!data) return res.status(400).json({ success: false, error: 'data is required' });
 
     const serieDuplicada = encontrarSerieDuplicada(data.pedidos);
@@ -617,7 +649,7 @@ app.post('/api/data', async (req, res) => {
       });
     }
 
-    await saveData('app_data', data);
+    await saveData('app_data', data, { atualizarOrdem: atualizarOrdem === true });
     res.json({ success: true, message: 'Dados salvos com sucesso' });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

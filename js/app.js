@@ -77,9 +77,9 @@ const Store = {
       criadoEm:  new Date().toISOString()
     };
   },
-  async save(data) {
+  async save(data, options = {}) {
     if (typeof API !== 'undefined') {
-      await API.saveData(data);
+      await API.saveData(data, options);
     } else {
       localStorage.setItem(this._key, JSON.stringify(data));
     }
@@ -649,7 +649,7 @@ const App = {
 
   async salvarOrdemPedidos() {
     this.normalizarOrdemPedidos();
-    await Store.save(this.data);
+    await Store.save(this.data, { atualizarOrdem: true });
     delete this._pageContentCache['pedidos'];
     delete this._pageContentCache['dashboard'];
     this.filtrarPedidos();
@@ -1235,7 +1235,7 @@ const App = {
     prazoEl.value = somarDiasData(dataPedido, dias);
   },
 
-  salvarPedido(ev) {
+  async salvarPedido(ev) {
     ev.preventDefault();
     const gv   = id => document.getElementById(id)?.value || '';
     const prod = gv('np-produto');
@@ -1312,7 +1312,7 @@ const App = {
 
     if (posicaoLista === 'topo') this.data.pedidos.unshift(p);
     else this.data.pedidos.push(p);
-    Store.save(this.data);
+    await Store.save(this.data, { atualizarOrdem: posicaoLista === 'topo' });
     this.log('Criar Pedido', {
       pedidoId: p.id,
       produto: p.produto,
