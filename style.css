@@ -1494,3 +1494,41 @@ select option { background: var(--bg-2); }
 #page-content-container .page.active {
   display: flex;
 }
+
+.update-banner {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 3000;
+  display: none;
+  width: min(380px, calc(100vw - 40px));
+  padding: 14px;
+  border: 1px solid var(--border-light);
+  border-left: 4px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--bg-2);
+  box-shadow: var(--shadow-lg);
+  color: var(--text);
+  gap: 12px;
+}
+
+.update-banner.show {
+  display: grid;
+}
+
+.update-banner__text {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.update-banner__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-sm {
+  min-height: 32px;
+  padding: 6px 12px;
+  font-size: 12px;
+}

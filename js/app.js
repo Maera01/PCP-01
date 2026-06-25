@@ -83,6 +83,9 @@ const Store = {
     } else {
       localStorage.setItem(this._key, JSON.stringify(data));
     }
+    if (window.App && typeof window.App.assinaturaDados === 'function' && data === window.App.data) {
+      window.App._dataSignature = window.App.assinaturaDados(data);
+    }
   },
   async init() {
     let data = null;
@@ -290,6 +293,10 @@ const App = {
   _editIdx:          null,
   _finalizarIdx:     null,
   _conferirExpIdx:   null,
+  _dataSignature:    '',
+  _monitorTimer:     null,
+  _idleTimer:        null,
+  _updatePendingData:null,
 
   // ── INIT ──
 
@@ -305,14 +312,17 @@ const App = {
       this.data = Store.initLocal();
     }
     
-    // Iniciar sincronização com servidor (se disponível)
+    this._dataSignature = this.assinaturaDados(this.data);
+    this.iniciarLogoutInatividade(10 * 60 * 1000);
+
+    // Monitorar atualizacoes do servidor sem sobrescrever dados de outros usuarios
     if (typeof API !== 'undefined') {
       API.checkServer().then(serverOk => {
         if (serverOk) {
-          API.startAutoSync(30000); // Sincronizar a cada 30s
-          this.toast('✓ Conectado ao servidor de backup.', 'success');
+          this.iniciarMonitorAtualizacoes(60000);
+          this.toast('Conectado ao servidor de backup.', 'success');
         } else {
-          this.toast('⚠ Operando com localStorage local.', 'warning');
+          this.toast('Operando com localStorage local.', 'warning');
         }
       });
     }
@@ -2776,7 +2786,111 @@ const App = {
   },
 
   // ── TOAST ──
+  // --- ATUALIZACAO E SESSAO ---
 
+  assinaturaDados(data) {
+    try {
+      return JSON.stringify(data || {});
+    } catch (err) {
+      return String(Date.now());
+    }
+  },
+
+  modalAberto() {
+    return !!document.querySelector('.modal-overlay.open');
+  },
+
+  iniciarMonitorAtualizacoes(intervalMs = 60000) {
+    clearInterval(this._monitorTimer);
+    this._monitorTimer = setInterval(() => this.verificarAtualizacaoServidor(), intervalMs);
+  },
+
+  async verificarAtualizacaoServidor() {
+    if (typeof API === 'undefined') return;
+    try {
+      const remoto = await API.loadData();
+      if (!remoto) return;
+
+      const assinatura = this.assinaturaDados(remoto);
+      if (!this._dataSignature) this._dataSignature = assinatura;
+      if (assinatura === this._dataSignature) return;
+
+      if (this.modalAberto()) {
+        this._updatePendingData = remoto;
+        this.mostrarAvisoAtualizacao();
+        return;
+      }
+
+      this.aplicarDadosAtualizados(remoto);
+    } catch (err) {
+      console.warn('Erro ao verificar atualizacao do servidor:', err);
+    }
+  },
+
+  aplicarDadosAtualizados(data) {
+    document.querySelectorAll('.modal-overlay.open').forEach(modal => modal.classList.remove('open'));
+    this.data = data;
+    this._dataSignature = this.assinaturaDados(data);
+    this._updatePendingData = null;
+    this._pageContentCache = {};
+    this.esconderAvisoAtualizacao();
+    this._populateProdutos();
+    this.navigate(this.paginaAtual, { force: true });
+    this._atualizarFooter();
+    this.toast('Dados atualizados.', 'success');
+  },
+
+  mostrarAvisoAtualizacao() {
+    let aviso = document.getElementById('aviso-atualizacao');
+    if (!aviso) {
+      aviso = document.createElement('div');
+      aviso.id = 'aviso-atualizacao';
+      aviso.className = 'update-banner';
+      aviso.innerHTML = `
+        <div class="update-banner__text">Existem atualizacoes feitas por outro usuario.</div>
+        <div class="update-banner__actions">
+          <button type="button" class="btn-secondary btn-sm" onclick="App.esconderAvisoAtualizacao()">Depois</button>
+          <button type="button" class="btn-primary btn-sm" onclick="App.atualizarAgora()">Atualizar agora</button>
+        </div>
+      `;
+      document.body.appendChild(aviso);
+    }
+    aviso.classList.add('show');
+  },
+
+  esconderAvisoAtualizacao() {
+    const aviso = document.getElementById('aviso-atualizacao');
+    if (aviso) aviso.classList.remove('show');
+  },
+
+  atualizarAgora() {
+    if (this._updatePendingData) {
+      this.aplicarDadosAtualizados(this._updatePendingData);
+      return;
+    }
+    window.location.reload();
+  },
+
+  iniciarLogoutInatividade(timeoutMs = 600000) {
+    const resetar = () => {
+      clearTimeout(this._idleTimer);
+      this._idleTimer = setTimeout(() => {
+        this.toast('Sessao encerrada por inatividade.', 'warning');
+        setTimeout(() => {
+          if (typeof Auth !== 'undefined' && typeof Auth.logout === 'function') {
+            Auth.logout();
+          } else {
+            window.location.href = 'index.html';
+          }
+        }, 800);
+      }, timeoutMs);
+    };
+
+    ['click','mousemove','keydown','scroll','touchstart'].forEach(evento => {
+      document.addEventListener(evento, resetar, { passive: true });
+    });
+    resetar();
+  },
   toast(msg, tipo = '') {
     const el = document.getElementById('toast');
     if (!el) return;
@@ -2834,4 +2948,5 @@ const App = {
 };
 
 // ── BOOT ────────────────────────────────────────────────────
+window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());
