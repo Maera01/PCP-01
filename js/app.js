@@ -1961,6 +1961,9 @@ const App = {
       origemId: item.id || '',
       parentId: item.parentId || '',
       codigo: item.codigo || '',
+      identificacao: item.identificacao || '',
+      tipo: item.tipo || '',
+      nivelPlanilha: item.nivelPlanilha || '',
       descricao: item.descricao || '',
       quantidade: item.quantidade || 1,
       unidade: item.unidade || 'UN',
@@ -2002,7 +2005,7 @@ const App = {
 
     container.innerHTML = itensOrdenados.map(item => `
       <div class="component-tree-row">
-        <small>${escapar(item.codigo) || '—'}</small>
+        <small>${escapar(item.codigo) || '-'}</small>
         <div style="padding-left:${Math.min((parseInt(item.nivel, 10) || 0) * 18, 90)}px">
           ${parseInt(item.nivel, 10) > 0 ? '-> ' : ''}<strong>${escapar(item.descricao)}</strong>
         </div>
@@ -2072,47 +2075,58 @@ const App = {
     const itens = [];
     const porNivel = new Map();
     const principaisPmt = new Set();
+    const modulosEqp = new Set();
 
-    linhas.forEach(row => {
-      const nivel = String(row[1] || '').trim();
-      const partes = nivel.split('.');
-      if (partes.length !== 2) return;
-      const codigo = this.codigoItemPlanilha(row);
-      const descricao = String(row[7] || '').trim();
-      if (!descricao) return;
-      const item = {
-        id: uid(),
-        parentId: '',
-        codigo,
-        descricao,
-        quantidade: this.parseQuantidadeComponente(row[13]),
-        unidade: String(row[18] || row[15] || 'UN').trim() || 'UN',
-        nivel: 0
-      };
-      itens.push(item);
-      porNivel.set(nivel, item);
-      if (this.identificacaoItemPlanilha(row).toUpperCase().startsWith('PMT')) principaisPmt.add(nivel);
+    const criarItem = (row, nivel, parentId = '', nivelVisual = 0, tipo = '') => ({
+      id: uid(),
+      parentId,
+      codigo: this.codigoItemPlanilha(row),
+      identificacao: this.identificacaoItemPlanilha(row),
+      tipo,
+      descricao: String(row[7] || '').trim(),
+      quantidade: this.parseQuantidadeComponente(row[13]),
+      unidade: String(row[18] || row[15] || 'UN').trim() || 'UN',
+      nivel: nivelVisual,
+      nivelPlanilha: nivel
     });
 
     linhas.forEach(row => {
       const nivel = String(row[1] || '').trim();
       const partes = nivel.split('.');
-      if (partes.length !== 3) return;
-      const nivelPai = `${partes[0]}.${partes[1]}`;
-      const pai = porNivel.get(nivelPai);
-      if (!pai || principaisPmt.has(nivelPai)) return;
-      const codigo = this.codigoItemPlanilha(row);
+      if (partes.length !== 2) return;
       const descricao = String(row[7] || '').trim();
       if (!descricao) return;
-      itens.push({
-        id: uid(),
-        parentId: pai.id,
-        codigo,
-        descricao,
-        quantidade: this.parseQuantidadeComponente(row[13]),
-        unidade: String(row[18] || row[15] || 'UN').trim() || 'UN',
-        nivel: 1
-      });
+      const identificacao = this.identificacaoItemPlanilha(row).toUpperCase();
+      const tipo = identificacao.startsWith('EQP') ? 'EQP' : '';
+      const item = criarItem(row, nivel, '', 0, tipo);
+      itens.push(item);
+      porNivel.set(nivel, item);
+      if (identificacao.startsWith('PMT')) principaisPmt.add(nivel);
+      if (identificacao.startsWith('EQP')) modulosEqp.add(nivel);
+    });
+
+    linhas.forEach(row => {
+      const nivel = String(row[1] || '').trim();
+      const partes = nivel.split('.');
+      if (partes.length < 3) return;
+
+      const nivelPaiDireto = partes.slice(0, -1).join('.');
+      const nivelPaiBase = `${partes[0]}.${partes[1]}`;
+      const dentroDeEqp = [...modulosEqp].some(eqp => nivel === eqp || nivel.startsWith(`${eqp}.`));
+      const maxNivel = dentroDeEqp ? 4 : 3;
+      if (partes.length > maxNivel) return;
+      if (principaisPmt.has(nivelPaiBase)) return;
+
+      const pai = porNivel.get(nivelPaiDireto) || porNivel.get(nivelPaiBase);
+      if (!pai) return;
+      const descricao = String(row[7] || '').trim();
+      if (!descricao) return;
+      const identificacao = this.identificacaoItemPlanilha(row).toUpperCase();
+      const tipo = identificacao.startsWith('EQP') ? 'EQP' : '';
+      const item = criarItem(row, nivel, pai.id, (parseInt(pai.nivel, 10) || 0) + 1, tipo);
+      itens.push(item);
+      porNivel.set(nivel, item);
+      if (identificacao.startsWith('EQP')) modulosEqp.add(nivel);
     });
 
     return { produto, itens: this.ordenarComponentesArvore(itens) };
@@ -2225,14 +2239,18 @@ const App = {
       acc[pai].push({ item, idx });
       return acc;
     }, {});
-    const renderLinha = ({ item, idx }, isFilho = false) => {
+
+    const renderLinha = ({ item, idx }, nivel = 0) => {
       const conferido = modo === 'almoxarifado' ? '' : `
         <label><input type="checkbox" class="comp-conferido-check" data-modo="${modo}" data-idx="${idx}" ${item.conferido ? 'checked' : ''} ${dis} onchange="App.aplicarCheckPaiComponentes(this, 'conferido')"/> Conferido</label>`;
+      const tagEqp = String(item.tipo || item.identificacao || '').toUpperCase().startsWith('EQP')
+        ? '<span class="badge badge-default component-type-badge">EQP</span>'
+        : '';
       return `
-      <div class="component-check-row component-check-row-${modo} ${isFilho ? 'component-child-row' : 'component-parent-row'}" data-parent="${escapar(item.parentId || '')}">
-        <small>${escapar(item.codigo) || '—'}</small>
-        <div class="component-check-name" style="padding-left:${isFilho ? 18 : 0}px">
-          ${isFilho ? '-> ' : ''}<strong>${escapar(item.descricao)}</strong>
+      <div class="component-check-row component-check-row-${modo} ${nivel > 0 ? 'component-child-row' : 'component-parent-row'}" data-parent="${escapar(item.parentId || '')}">
+        <small>${escapar(item.codigo) || '-'}</small>
+        <div class="component-check-name" style="padding-left:${Math.min(nivel * 18, 90)}px">
+          ${nivel > 0 ? '-> ' : ''}<strong>${escapar(item.descricao)}</strong> ${tagEqp}
         </div>
         <span>${escapar(item.quantidade)}</span>
         <small>${escapar(item.unidade || 'UN')}</small>
@@ -2241,28 +2259,29 @@ const App = {
       </div>`;
     };
 
-    const grupos = (filhosPorPai[''] || []).map(grupo => {
-      const listaFilhos = filhosPorPai[grupo.item.origemId || grupo.item.id] || [];
-      const filhosHtml = listaFilhos.map(filho => renderLinha(filho, true)).join('');
-      const botao = listaFilhos.length
+    const renderGrupo = (node, nivel = 0) => {
+      const chave = node.item.origemId || node.item.id;
+      const filhos = filhosPorPai[chave] || [];
+      const filhosHtml = filhos.map(filho => renderGrupo(filho, nivel + 1)).join('');
+      const botao = filhos.length
         ? `<button type="button" class="component-toggle" onclick="App.toggleComponentesFilhos(this)">+</button>`
         : '<span class="component-toggle-placeholder"></span>';
       return `
-        <div class="component-group">
+        <div class="component-group component-level-${Math.min(nivel, 4)}">
           <div class="component-group-head">
             ${botao}
-            <div class="component-group-main">${renderLinha(grupo, false)}</div>
+            <div class="component-group-main">${renderLinha(node, nivel)}</div>
           </div>
           <div class="component-children" style="display:none">${filhosHtml}</div>
         </div>`;
-    }).join('');
+    };
 
+    const grupos = (filhosPorPai[''] || []).map(grupo => renderGrupo(grupo, 0)).join('');
     const toolbar = modo === 'almoxarifado' && !disabled
       ? `<div class="component-actions"><button type="button" class="btn btn-secondary" onclick="App.alternarTodosComponentesSeparados()">Marcar/desmarcar separados</button></div>`
       : '';
     return toolbar + grupos;
   },
-
   alternarTodosComponentesSeparados() {
     const checks = [...document.querySelectorAll('#ed-componentes-almox .comp-separado-check:not(:disabled)')];
     const marcar = checks.some(input => !input.checked);
@@ -2911,6 +2930,7 @@ const App = {
       aviso.id = 'aviso-atualizacao';
       aviso.className = 'update-banner';
       aviso.innerHTML = `
+        <div class="update-banner__status">Atualizacao</div>
         <div class="update-banner__text" id="aviso-atualizacao-texto"></div>
         <div class="update-banner__actions">
           <button type="button" class="btn-secondary btn-sm" onclick="App.esconderAvisoAtualizacao()">Depois</button>
@@ -2929,12 +2949,12 @@ const App = {
     const bloqueado = this.modalAberto();
     if (texto) {
       texto.textContent = bloqueado
-        ? 'Existem atualizacoes novas. Salve ou cancele sua edicao antes de atualizar.'
-        : 'Existem atualizacoes feitas por outro usuario. Voce ja pode atualizar os dados.';
+        ? 'Dados novos disponiveis. Salve ou cancele a janela aberta para atualizar.'
+        : 'Dados novos disponiveis. Atualize para ver as mudancas feitas por outro usuario.';
     }
     if (botao) {
       botao.disabled = bloqueado;
-      botao.title = bloqueado ? 'Feche a janela aberta antes de atualizar.' : '';
+      botao.title = bloqueado ? 'Salve ou cancele a janela aberta antes de atualizar.' : '';
     }
   },
 
