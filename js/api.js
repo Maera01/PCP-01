@@ -84,11 +84,14 @@ const API = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ data, atualizarOrdem: !!options.atualizarOrdem })
         });
-        if (res.ok) {
-          console.log('☁️ Dados sincronizados com servidor');
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          throw new Error(json.error || 'Erro ao salvar dados no servidor');
         }
+        console.log('☁️ Dados sincronizados com servidor');
       } catch (err) {
         console.warn('⚠ Não foi possível sincronizar com servidor:', err.message);
+        if (options.strict) throw err;
       }
     }
   },

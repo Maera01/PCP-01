@@ -105,9 +105,12 @@
           : App.openModal('novo-pedido')">
         + Novo Pedido
       </button>
-      <button class="btn btn-secondary" onclick="App.openProdutosModal()">Produtos</button>
-      <button class="btn btn-secondary" onclick="App.openKitsModal()">Kits</button>
-      <button class="btn btn-secondary"
+      <button class="btn btn-secondary" id="btn-produtos" onclick="App.openProdutosModal()">Produtos</button>
+      <button class="btn btn-secondary" id="btn-kits" onclick="App.openKitsModal()">Kits</button>
+      <button class="btn btn-secondary" id="btn-importar-dados"
+        onclick="document.getElementById('input-importar-dados').click()">↑ Importar</button>
+      <input id="input-importar-dados" type="file" accept="application/json,.json" onchange="App.importarDados(event)" hidden />
+      <button class="btn btn-secondary" id="btn-exportar-dados"
         onclick="App.exportarDados()">↓ Exportar</button>
     </div>
   </header>

@@ -368,10 +368,10 @@ const App = {
       if (!podeCriar) btnNovo.style.display = 'none';
     }
 
-    const btnExp = document.querySelector('.btn-secondary');
-    if (btnExp && !Auth.pode('exportar')) {
-      btnExp.style.display = 'none';
-    }
+    ['btn-importar-dados','btn-exportar-dados'].forEach(id => {
+      const btnExp = document.getElementById(id);
+      if (btnExp && !Auth.pode('exportar')) btnExp.style.display = 'none';
+    });
   },
 
   // ── NAVEGAÇÃO ──
@@ -436,11 +436,13 @@ const App = {
         pagina === 'pedidos' && podeCriarPedido ? '' : 'none';
     }
 
-    const btnExportar = document.querySelector('.topbar-right .btn-secondary');
-    if (btnExportar) {
-      const podeExportar = typeof Auth === 'undefined' || Auth.pode('exportar');
-      btnExportar.style.display = pagina !== 'dashboard' && podeExportar ? '' : 'none';
-    }
+    ['btn-importar-dados','btn-exportar-dados'].forEach(id => {
+      const btnExp = document.getElementById(id);
+      if (btnExp) {
+        const podeExportar = typeof Auth === 'undefined' || Auth.pode('exportar');
+        btnExp.style.display = podeExportar ? '' : 'none';
+      }
+    });
 
     if (window.innerWidth <= 900) {
       document.getElementById('sidebar').classList.remove('open');
@@ -500,7 +502,7 @@ const App = {
     tbody.innerHTML = pedidosLista.slice(0,8).map(p => `
       <tr style="cursor:default">
         <td><strong>${escapar(p.produto)}</strong></td>
-        <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
+        <td>${escapar(p.cliente)||'—'}</td>
         <td style="font-family:var(--font-mono);font-size:11px">${fmtData(p.prazo)}</td>
         <td>${badgeVencimento(p.statusVencimento, p.diasAtraso, p)}</td>
         <td><span class="badge badge-accent">${escapar(etapaAtual(p))}</span></td>
@@ -580,7 +582,7 @@ const App = {
     const podeOrdenar = this.podeOrdenarPedidos();
 
     tbody.innerHTML = lista.length === 0
-      ? `<tr><td colspan="12">
+      ? `<tr><td colspan="11">
            <div class="empty-state">
              <span class="empty-icon">◧</span>Nenhum pedido encontrado
            </div>
@@ -606,8 +608,7 @@ const App = {
             </div>
           </td>
           <td><strong>${escapar(p.produto)}</strong> ${badgeUrgencia(p)}</td>
-          <td style="font-family:var(--font-mono);font-size:11px">${escapar(p.serie)||'—'}</td>
-          <td class="col-hide-notebook">${escapar(p.cliente)||'—'}</td>
+          <td>${escapar(p.cliente)||'—'}</td>
           <td class="col-hide-notebook">${corDot(p.cor)} ${escapar(p.cor)||'—'}</td>
           <td class="col-hide-notebook" style="text-align:center">${p.quantidade}</td>
           <td class="col-hide-notebook" style="font-family:var(--font-mono);font-size:11px">${fmtData(p.dataPedido)}</td>
@@ -649,7 +650,7 @@ const App = {
 
   async salvarOrdemPedidos() {
     this.normalizarOrdemPedidos();
-    await Store.save(this.data, { atualizarOrdem: true });
+    await Store.save(this.data, { atualizarOrdem: true, strict: true });
     delete this._pageContentCache['pedidos'];
     delete this._pageContentCache['dashboard'];
     this.filtrarPedidos();
@@ -2759,19 +2760,81 @@ const App = {
 
   // ── EXPORTAR ──
 
-  exportarDados() {
-    const json = JSON.stringify(this.data, null, 2);
+  async exportarDados() {
+    let dadosExportar = this.data;
+    if (typeof API !== 'undefined') {
+      try {
+        dadosExportar = await API.loadData() || this.data;
+      } catch (err) {
+        dadosExportar = this.data;
+      }
+    }
+    const pacote = {
+      tipo: 'controle-producao-backup',
+      versao: 1,
+      exportadoEm: new Date().toISOString(),
+      data: dadosExportar
+    };
+    const json = JSON.stringify(pacote, null, 2);
     const blob = new Blob([json], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement('a');
     a.href = url;
-    a.download = `controle-producao-${dataLocalISO()}.json`;
+    a.download = `backup-controle-producao-${dataLocalISO()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    this.toast('Exportação iniciada!', 'success');
+    this.toast('Backup exportado.', 'success');
   },
 
-  // ── MODAIS ──
+  async importarDados(ev) {
+    const input = ev?.target;
+    const arquivo = input?.files?.[0];
+    if (!arquivo) return;
+
+    try {
+      const texto = await arquivo.text();
+      const pacote = JSON.parse(texto);
+      const data = pacote?.tipo === 'controle-producao-backup' ? pacote.data : pacote;
+      const dados = this.normalizarDadosImportados(data);
+
+      if (!confirm('Importar este backup vai substituir os dados atuais do sistema. Deseja continuar?')) {
+        input.value = '';
+        return;
+      }
+
+      this.data = dados;
+      await Store.save(this.data, { atualizarOrdem: true, strict: true });
+      this._dataSignature = this.assinaturaDados(this.data);
+      this._pageContentCache = {};
+      this._populateProdutos();
+      this.navigate(this.paginaAtual, { force: true });
+      this._atualizarFooter();
+      this.toast('Backup importado com sucesso.', 'success');
+    } catch (err) {
+      console.error('Erro ao importar backup:', err);
+      this.toast('Nao foi possivel importar este arquivo.', 'error');
+    } finally {
+      if (input) input.value = '';
+    }
+  },
+
+  normalizarDadosImportados(data) {
+    if (!data || typeof data !== 'object') throw new Error('Backup invalido');
+    const normalizado = { ...data };
+    normalizado.pedidos = Array.isArray(normalizado.pedidos) ? normalizado.pedidos : [];
+    normalizado.expedicao = Array.isArray(normalizado.expedicao) ? normalizado.expedicao : [];
+    normalizado.kits = Array.isArray(normalizado.kits) ? normalizado.kits : [];
+    normalizado.logs = Array.isArray(normalizado.logs) ? normalizado.logs : [];
+    normalizado.produtos = Array.isArray(normalizado.produtos) && normalizado.produtos.length
+      ? normalizado.produtos
+      : PRODUTOS.slice();
+    normalizado.produtoEstruturas = Array.isArray(normalizado.produtoEstruturas)
+      ? normalizado.produtoEstruturas
+      : [];
+    if (!normalizado.criadoEm) normalizado.criadoEm = new Date().toISOString();
+    return normalizado;
+  },
+  // MODAIS ──
 
   openModal(nome) {
     const el = document.getElementById(`modal-${nome}`);
