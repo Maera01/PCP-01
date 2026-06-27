@@ -2579,14 +2579,65 @@ const App = {
     this.openModal('conferir-expedicao');
   },
 
+  solicitarCredenciais({ titulo = 'Confirmar credenciais', loginLabel = 'Login', senhaLabel = 'Senha' } = {}) {
+    return new Promise(resolve => {
+      const anterior = document.getElementById('modal-credenciais-seguras');
+      if (anterior) anterior.remove();
+
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay open';
+      overlay.id = 'modal-credenciais-seguras';
+      overlay.innerHTML = `
+        <div class="modal" onclick="event.stopPropagation()">
+          <div class="modal-header">
+            <h2>${escapar(titulo)}</h2>
+            <button type="button" class="modal-close" data-cred-cancel>x</button>
+          </div>
+          <form class="modal-body" data-cred-form autocomplete="off">
+            <div class="form-group">
+              <label>${escapar(loginLabel)}</label>
+              <input class="input" id="cred-login" autocomplete="username" required />
+            </div>
+            <div class="form-group">
+              <label>${escapar(senhaLabel)}</label>
+              <input class="input" id="cred-senha" type="password" autocomplete="current-password" required />
+            </div>
+            <div class="modal-footer" style="padding-left:0;padding-right:0;padding-bottom:0">
+              <button type="button" class="btn btn-secondary" data-cred-cancel>Cancelar</button>
+              <button type="submit" class="btn btn-primary">Confirmar</button>
+            </div>
+          </form>
+        </div>`;
+
+      const finalizar = valor => {
+        overlay.remove();
+        resolve(valor);
+      };
+      overlay.addEventListener('click', ev => {
+        if (ev.target === overlay || ev.target.closest('[data-cred-cancel]')) finalizar(null);
+      });
+      overlay.querySelector('[data-cred-form]').addEventListener('submit', ev => {
+        ev.preventDefault();
+        finalizar({
+          login: overlay.querySelector('#cred-login').value.trim(),
+          senha: overlay.querySelector('#cred-senha').value
+        });
+      });
+      document.body.appendChild(overlay);
+      setTimeout(() => overlay.querySelector('#cred-login')?.focus(), 0);
+    });
+  },
+
   async _promptMasterAuthorization() {
-    const login = prompt('Usuário master para autorizar aprovação com item faltando (login):');
-    if (!login) return null;
-    const senha = prompt('Senha do usuário master:');
-    if (!senha) return null;
-    const usuario = await Auth.validarCredenciais(login, senha);
+    const credenciais = await this.solicitarCredenciais({
+      titulo: 'Autorizacao master',
+      loginLabel: 'Usuario master',
+      senhaLabel: 'Senha do usuario master'
+    });
+    if (!credenciais?.login || !credenciais?.senha) return null;
+    const usuario = await Auth.validarCredenciais(credenciais.login, credenciais.senha);
     if (!usuario || usuario.perfil !== 'admin') {
-      this.toast('Credenciais master inválidas.', 'error');
+      this.toast('Credenciais master invalidas.', 'error');
       return null;
     }
     return usuario;
@@ -2594,13 +2645,15 @@ const App = {
 
   async _promptExpedicaoDoubleCheck() {
     if (!confirm('Tem certeza que deseja autorizar este equipamento?')) return null;
-    const login = prompt('Login do usuário de expedição ou admin:');
-    if (!login) return null;
-    const senha = prompt('Senha do usuário de expedição ou admin:');
-    if (!senha) return null;
-    const usuario = await Auth.validarCredenciais(login, senha);
+    const credenciais = await this.solicitarCredenciais({
+      titulo: 'Autorizacao de expedicao',
+      loginLabel: 'Usuario expedicao ou admin',
+      senhaLabel: 'Senha'
+    });
+    if (!credenciais?.login || !credenciais?.senha) return null;
+    const usuario = await Auth.validarCredenciais(credenciais.login, credenciais.senha);
     if (!usuario || !['expedicao', 'admin'].includes(usuario.perfil)) {
-      this.toast('Credenciais de expedição/admin inválidas.', 'error');
+      this.toast('Credenciais de expedicao/admin invalidas.', 'error');
       return null;
     }
     return usuario;
