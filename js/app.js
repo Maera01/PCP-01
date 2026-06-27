@@ -1752,7 +1752,7 @@ const App = {
       editarProducao:   document.getElementById('user-can-editarProducao').checked,
       editarExpedicao:  document.getElementById('user-can-editarExpedicao').checked,
       exportar:         document.getElementById('user-can-exportar').checked,
-      excluir:          false
+      excluir:          perfil === 'admin'
     };
     if (id) {
       const patch = { nome, login, perfil, permissoes };

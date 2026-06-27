@@ -63,7 +63,7 @@ function novoIdUsuario() {
   return 'u' + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
 }
 
-function normalizarPermissoes(permissoes) {
+function normalizarPermissoes(permissoes, perfil = '') {
   const normalizadas = { ...(permissoes || {}) };
   if (typeof normalizadas.paginas === 'string') {
     normalizadas.paginas = normalizadas.paginas
@@ -71,14 +71,16 @@ function normalizarPermissoes(permissoes) {
       .map(page => page.trim())
       .filter(Boolean);
   }
+  if (perfil === 'admin') normalizadas.excluir = true;
   return normalizadas;
 }
 
 function normalizarUsuario(usuario) {
   if (!usuario) return null;
+  const base = usuario.permissoes || PERMISSOES[usuario.perfil] || {};
   return {
     ...usuario,
-    permissoes: normalizarPermissoes(usuario.permissoes || PERMISSOES[usuario.perfil] || {})
+    permissoes: normalizarPermissoes(base, usuario.perfil)
   };
 }
 
@@ -158,7 +160,13 @@ const Auth = {
   getSessao() {
     try {
       const raw = localStorage.getItem(this._key);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const sessao = JSON.parse(raw);
+      const normalizada = normalizarUsuario(sessao);
+      if (JSON.stringify(normalizada?.permissoes || {}) !== JSON.stringify(sessao.permissoes || {})) {
+        localStorage.setItem(this._key, JSON.stringify(normalizada));
+      }
+      return normalizada;
     } catch(e) { return null; }
   },
 

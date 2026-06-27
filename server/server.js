@@ -142,14 +142,20 @@ const validarMasterPassword = (login, senha) => {
   return crypto.timingSafeEqual(senhaBuffer, masterBuffer) ? masterUsuario() : null;
 };
 
+const normalizarPermissoesUsuario = (permissoes, perfil) => {
+  const normalizadas = typeof permissoes === 'string'
+    ? JSON.parse(permissoes || '{}')
+    : { ...(permissoes || {}) };
+  if (perfil === 'admin') normalizadas.excluir = true;
+  return normalizadas;
+};
+
 const sanitizeUsuario = (usuario) => ({
   id: usuario.id,
   nome: usuario.nome,
   login: usuario.login,
   perfil: usuario.perfil,
-  permissoes: typeof usuario.permissoes === 'string'
-    ? JSON.parse(usuario.permissoes || '{}')
-    : (usuario.permissoes || {})
+  permissoes: normalizarPermissoesUsuario(usuario.permissoes, usuario.perfil)
 });
 
 // Middlewares
@@ -329,7 +335,7 @@ const inserirUsuario = async ({ id, nome, login, senha, perfil, permissoes }) =>
     nome: String(nome || '').trim(),
     login: String(login || '').trim(),
     perfil: perfil || 'expedicao',
-    permissoes: permissoes || PERMISSOES[perfil] || {}
+    permissoes: normalizarPermissoesUsuario(permissoes || PERMISSOES[perfil] || {}, perfil)
   };
   const passwordHash = hashSenha(senha);
 
@@ -357,7 +363,7 @@ const atualizarUsuario = async (id, patch) => {
   const nome = String(patch.nome || '').trim();
   const login = String(patch.login || '').trim();
   const perfil = patch.perfil || 'expedicao';
-  const permissoes = patch.permissoes || PERMISSOES[perfil] || {};
+  const permissoes = normalizarPermissoesUsuario(patch.permissoes || PERMISSOES[perfil] || {}, perfil);
   const senha = String(patch.senha || '');
 
   if (USE_POSTGRES) {
