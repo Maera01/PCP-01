@@ -335,15 +335,23 @@
         style="padding:22px;display:none;overflow-y:auto;flex:1">
         <div class="edit-section-title">Dados de Almoxarifado</div>
         <div class="form-grid">
-          <div class="form-group">
-            <label>N° Série</label>
-            <input class="input" id="ed-serie"
-              placeholder="Ex: 20260115001"/>
-          </div>
-          <div class="form-group">
-            <label>N° OP</label>
-            <input class="input" id="ed-op"
-              placeholder="Ex: OP-2026-001"/>
+        <div class="form-group">
+          <label>N° Série</label>
+          <input class="input" id="ed-serie"
+            placeholder="Ex: 20260115001"/>
+        </div>
+        <div class="form-group">
+          <label>Série obrigatória</label>
+          <label class="checkbox-label checkbox-card">
+            <input type="checkbox" id="ed-serie-obrigatoria"
+              onchange="App.atualizarBloqueioSerieEdit()"/>
+            N° de série fixo
+          </label>
+        </div>
+        <div class="form-group">
+          <label>N° OP</label>
+          <input class="input" id="ed-op"
+            placeholder="Ex: OP-2026-001"/>
           </div>
           <div class="form-group">
             <label>Status Separação</label>
@@ -498,6 +506,13 @@
           <label>N° Série</label>
           <input class="input" id="np-serie"
             placeholder="Ex: 20260115001"/>
+        </div>
+        <div class="form-group">
+          <label>Série obrigatória</label>
+          <label class="checkbox-label checkbox-card">
+            <input type="checkbox" id="np-serie-obrigatoria"/>
+            N° de série fixo
+          </label>
         </div>
         <div class="form-group">
           <label>Cliente</label>

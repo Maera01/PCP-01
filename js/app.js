@@ -642,6 +642,10 @@ const App = {
     return typeof Auth === 'undefined' || Auth.getPerfil() === 'admin';
   },
 
+  usuarioAdmin() {
+    return typeof Auth === 'undefined' || Auth.getPerfil() === 'admin';
+  },
+
   normalizarOrdemPedidos() {
     (this.data.pedidos || []).forEach((pedido, indice) => {
       pedido.ordemFila = indice;
@@ -774,7 +778,7 @@ const App = {
         ${e.problema && e.problema !== 'NÃ£o' && e.problema !== 'NaN'
           ? `<span class="etapa-problema">${escapar(e.problema)}</span>` : ''}
         ${e.problema && e.problema !== 'NÃ£o' && e.problema !== 'NaN' ? `
-          <div class="etapa-row"><span>SaÃ­da</span><span>${fmtData(e.problemaSaida)}</span></div>
+          <div class="etapa-row"><span>Início problema</span><span>${fmtData(e.problemaSaida)}</span></div>
           <div class="etapa-row"><span>Retorno</span><span>${fmtData(e.problemaRetorno)}</span></div>
           ${e.problemaDescricao ? `<div class="etapa-obs">${escapar(e.problemaDescricao)}</div>` : ''}` : ''}
       </div>`).join('');
@@ -868,6 +872,7 @@ const App = {
 
     // â”€â”€ ALMOXARIFADO â”€â”€
     sv('ed-serie').value      = p.serie              || '';
+    sv('ed-serie-obrigatoria').checked = !!p.serieObrigatoria;
     sv('ed-op').value         = p.numeroOP           || '';
     sv('ed-statussep').value  = p.statusSep === 'Aguardando produÃ§Ã£o'
       ? 'Aguardando SeparaÃ§Ã£o'
@@ -881,6 +886,7 @@ const App = {
     sv('ed-obs-comercial').value = p.observacao      || '';
     sv('ed-obs-almox').value  = p.observacaoAlmox    || '';
     this.toggleCamposPecas();
+    this.atualizarBloqueioSerieEdit();
     this.garantirChecklistComponentesPedido(p);
     const almoxBox = document.getElementById('ed-componentes-almox');
     if (almoxBox) {
@@ -935,7 +941,7 @@ const App = {
           </div>` : '';
         const problemaDetalhe = key !== 'conferencia' ? `
           <div class="form-group etapa-problema-detalhe" data-etapa="${key}">
-            <label>Data SaÃ­da</label>
+            <label>Data Início Problema</label>
             <input class="input" type="date"
               id="ete-${key}-prob-saida" value="${e.problemaSaida||''}" ${dis}/>
           </div>
@@ -1041,6 +1047,18 @@ const App = {
     });
   },
 
+  atualizarBloqueioSerieEdit() {
+    const serieInput = document.getElementById('ed-serie');
+    const serieObrigatoriaInput = document.getElementById('ed-serie-obrigatoria');
+    if (!serieInput || !serieObrigatoriaInput) return;
+
+    const p = this._editIdx !== null ? this.data.pedidos[this._editIdx] : null;
+    const serieFixa = !!(p?.serieObrigatoria || serieObrigatoriaInput.checked);
+    const podeAdmin = this.usuarioAdmin();
+
+    serieInput.disabled = serieFixa && !podeAdmin;
+    serieObrigatoriaInput.disabled = !podeAdmin;
+  },
   toggleDatasConferencia() {
     const tipo = document.getElementById('ete-conferencia-tipo')?.value || '';
     document.querySelectorAll('.conferencia-data-parcial').forEach(el => {
@@ -1094,12 +1112,12 @@ const App = {
         const saida = gv(`ete-${key}-prob-saida`);
         const retorno = gv(`ete-${key}-prob-retorno`);
         const descricao = gv(`ete-${key}-prob-desc`).trim();
-        if (!saida || !retorno || !descricao) {
-          this.toast(`Preencha saÃ­da, retorno e explicaÃ§Ã£o do problema em ${nome}.`, 'error');
+        if (!saida || !descricao) {
+          this.toast(`Preencha a data de início e a explicação do problema em ${nome}.`, 'error');
           return false;
         }
-        if (retorno < saida) {
-          this.toast(`O retorno do problema nÃ£o pode ser anterior Ã  saÃ­da em ${nome}.`, 'error');
+        if (retorno && retorno < saida) {
+          this.toast(`O retorno do problema não pode ser anterior ao início em ${nome}.`, 'error');
           return false;
         }
       }
@@ -1146,12 +1164,26 @@ const App = {
     if (podeAlm) {
       const serieEditada = gv('ed-serie').trim();
       const serieFoiAlterada = normalizarSerie(serieEditada) !== normalizarSerie(p.serie);
+      const serieObrigatoriaAtual = !!p.serieObrigatoria;
+      const podeAdmin = this.usuarioAdmin();
+
+      if (serieObrigatoriaAtual && !podeAdmin && serieFoiAlterada) {
+        this.toast('Este número de série é fixo. Apenas admin pode alterar.', 'error');
+        return;
+      }
+      if ((serieObrigatoriaAtual || document.getElementById('ed-serie-obrigatoria')?.checked) && !serieEditada) {
+        this.toast('Informe o número de série obrigatório.', 'error');
+        return;
+      }
       if (serieFoiAlterada && this.serieJaCadastrada(serieEditada, p.id)) {
-        this.toast('JÃ¡ existe um pedido cadastrado com este nÃºmero de sÃ©rie.', 'error');
+        this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
         return;
       }
 
       p.serie              = serieEditada;
+      p.serieObrigatoria  = podeAdmin
+        ? !!document.getElementById('ed-serie-obrigatoria')?.checked
+        : serieObrigatoriaAtual;
       p.numeroOP           = gv('ed-op').trim();
       p.statusSep          = gv('ed-statussep');
       p.dataSep            = gv('ed-datsep');
@@ -1261,11 +1293,15 @@ const App = {
     }
 
     const serie = gv('np-serie').trim();
-    if (this.serieJaCadastrada(serie)) {
-      this.toast('JÃ¡ existe um pedido cadastrado com este nÃºmero de sÃ©rie.', 'error');
+    const serieObrigatoria = !!document.getElementById('np-serie-obrigatoria')?.checked;
+    if (serieObrigatoria && !serie) {
+      this.toast('Informe o número de série obrigatório.', 'error');
       return;
     }
-    const urgente = !!document.getElementById('np-urgente')?.checked;
+    if (this.serieJaCadastrada(serie)) {
+      this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
+      return;
+    }    const urgente = !!document.getElementById('np-urgente')?.checked;
     const posicaoLista = gv('np-posicao-lista') === 'topo' ? 'topo' : 'final';
     const prazoDias = gv('np-prazo-dias') === '' ? '' : parseInt(gv('np-prazo-dias'), 10);
     if (prazoDias !== '' && (Number.isNaN(prazoDias) || prazoDias < 0)) {
@@ -1277,6 +1313,7 @@ const App = {
       id:               uid(),
       produto:          prod,
       serie,
+      serieObrigatoria,
       cliente:          gv('np-cliente').trim(),
       cor:              gv('np-cor'),
       quantidade,
@@ -1477,7 +1514,7 @@ const App = {
             <span>${escapar(p.etapa)}: ${escapar(p.problema)}</span>
             <small>${escapar(p.descricao)}</small>
             ${(p.saida || p.retorno) ? `
-              <small>SaÃ­da: ${fmtData(p.saida)} Â· Retorno: ${fmtData(p.retorno)}</small>` : ''}
+              <small>Início problema: ${fmtData(p.saida)} · Retorno: ${fmtData(p.retorno)}</small>` : ''}
           </div>`).join('')}
       </details>`;
   },
@@ -2903,6 +2940,9 @@ const App = {
     normalizado.produtoEstruturas = Array.isArray(normalizado.produtoEstruturas)
       ? normalizado.produtoEstruturas
       : [];
+    normalizado.pedidos.forEach(pedido => {
+      pedido.serieObrigatoria = !!pedido.serieObrigatoria;
+    });
     if (!normalizado.criadoEm) normalizado.criadoEm = new Date().toISOString();
     return normalizado;
   },
