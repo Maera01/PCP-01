@@ -658,7 +658,7 @@ select option { background: var(--bg-2); }
 .modal-large { max-width: 800px; }
 
 #modal-produtos .modal-large {
-  max-width: 1080px;
+  max-width: 1120px;
 }
 
 #modal-produtos .modal-body {
@@ -713,8 +713,8 @@ select option { background: var(--bg-2); }
 .kits-layout,
 .produtos-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
-  gap: 18px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   align-items: start;
 }
 
@@ -727,19 +727,39 @@ select option { background: var(--bg-2); }
   min-width: 0;
 }
 
+.produtos-list-panel {
+  overflow: hidden;
+}
+
+.produtos-form-panel {
+  position: relative;
+  z-index: 1;
+  background: var(--bg-2);
+}
+
 #produtos-list {
   max-width: 100%;
-  overflow-x: auto;
+  max-height: 260px;
+  overflow: auto;
 }
 
 #produtos-list .table {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   table-layout: fixed;
 }
 
+#produtos-list .table th,
+#produtos-list .table td {
+  box-sizing: border-box;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
 #produtos-list th:nth-child(1),
 #produtos-list td:nth-child(1) {
-  width: 54%;
+  width: 58%;
 }
 
 #produtos-list th:nth-child(2),
@@ -749,7 +769,7 @@ select option { background: var(--bg-2); }
 
 #produtos-list th:nth-child(3),
 #produtos-list td:nth-child(3) {
-  width: 19%;
+  width: 15%;
 }
 
 #produtos-list td {
@@ -760,6 +780,7 @@ select option { background: var(--bg-2); }
 #produtos-list .actions-cell {
   gap: 4px;
   justify-content: flex-start;
+  flex-wrap: nowrap;
 }
 
 #produtos-list .btn-icon {
