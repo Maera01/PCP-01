@@ -145,15 +145,22 @@
         </div>
         <div class="modal-body">
           <div class="produtos-layout">
-            <div style="flex:1;max-width:460px">
+            <div class="produtos-list-panel">
               <div id="produtos-list"></div>
             </div>
-            <div style="flex:1">
+            <div class="produtos-form-panel">
               <form id="form-produto" onsubmit="App.salvarProduto(event)">
                 <input type="hidden" id="produto-original" />
                 <div class="form-group">
                   <label>Nome do Produto</label>
                   <input class="input" id="produto-nome" placeholder="Ex: ASE100" oninput="App.renderProdutoComponentes()" required />
+                </div>
+                <div class="form-group">
+                  <label>Tipo de Produção</label>
+                  <select class="input" id="produto-tipo">
+                    <option value="equipamento">Equipamento</option>
+                    <option value="acessorio">Acessório</option>
+                  </select>
                 </div>
                 <div style="display:flex;justify-content:flex-end;gap:8px">
                   <button type="button" class="btn btn-secondary" onclick="App.resetProdutoForm()">Limpar</button>

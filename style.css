@@ -661,6 +661,10 @@ select option { background: var(--bg-2); }
   max-width: 1080px;
 }
 
+#modal-produtos .modal-body {
+  overflow-x: hidden;
+}
+
 .modal-header {
   display: flex;
   align-items: center;
@@ -709,13 +713,61 @@ select option { background: var(--bg-2); }
 .kits-layout,
 .produtos-layout {
   display: grid;
-  grid-template-columns: minmax(280px, 0.8fr) minmax(360px, 1.2fr);
+  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: 18px;
   align-items: start;
 }
 
 .produtos-layout > div {
   min-width: 0;
+}
+
+.produtos-list-panel,
+.produtos-form-panel {
+  min-width: 0;
+}
+
+#produtos-list {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+#produtos-list .table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+#produtos-list th:nth-child(1),
+#produtos-list td:nth-child(1) {
+  width: 54%;
+}
+
+#produtos-list th:nth-child(2),
+#produtos-list td:nth-child(2) {
+  width: 27%;
+}
+
+#produtos-list th:nth-child(3),
+#produtos-list td:nth-child(3) {
+  width: 19%;
+}
+
+#produtos-list td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+#produtos-list .actions-cell {
+  gap: 4px;
+  justify-content: flex-start;
+}
+
+#produtos-list .btn-icon {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
+  font-size: 11px;
 }
 
 .kits-list-panel,

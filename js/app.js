@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
    CONTROLE DE PRODUÇÃO — app.js
    ============================================================ */
 'use strict';
@@ -22,13 +22,20 @@ const ET_NOMES = {
   montagemMecanica: 'Montagem Mecânica',
   testeFinal:       'Teste Final',
   fechamentoFinal:  'Fechamento Final',
-  burnIn:           'Burn-in'
+  burnIn:           'Burn-in',
+  montagemPreparacao: 'Montagem / Preparacao',
+  conferenciaFinal: 'Conferencia Final'
 };
 
 const ET_KEYS = [
   'conferencia','montagemRevisao','testeInicial',
   'montagemMecanica','testeFinal','fechamentoFinal','burnIn'
 ];
+
+const ET_FLUXOS = {
+  equipamento: ET_KEYS,
+  acessorio: ['montagemPreparacao','conferenciaFinal']
+};
 
 function etapaVazia() {
   return {
@@ -73,6 +80,7 @@ const Store = {
       produtos:  PRODUTOS.slice(),
       kits:      kits,
       produtoEstruturas: [],
+      produtoTipos: {},
       logs:      [],
       criadoEm:  new Date().toISOString()
     };
@@ -106,6 +114,7 @@ const Store = {
     if (!data.logs) data.logs = [];
     if (!data.kits) data.kits = [];
     if (!Array.isArray(data.produtoEstruturas)) data.produtoEstruturas = [];
+    if (!data.produtoTipos || typeof data.produtoTipos !== 'object' || Array.isArray(data.produtoTipos)) data.produtoTipos = {};
     if (!Array.isArray(data.produtos) || !data.produtos.length) data.produtos = PRODUTOS.slice();
     if (!data.pedidos) data.pedidos = [];
     if (!data.expedicao) data.expedicao = [];
@@ -119,6 +128,7 @@ const Store = {
     }
     if (!data.logs) data.logs = [];
     if (!Array.isArray(data.produtoEstruturas)) data.produtoEstruturas = [];
+    if (!data.produtoTipos || typeof data.produtoTipos !== 'object' || Array.isArray(data.produtoTipos)) data.produtoTipos = {};
     if (!Array.isArray(data.produtos) || !data.produtos.length) data.produtos = PRODUTOS.slice();
     return data;
   }
@@ -188,8 +198,16 @@ function etapaProducaoIniciada(etapa) {
   );
 }
 
+function tipoProducaoPedido(pedido) {
+  return pedido?.tipoProducao === 'acessorio' ? 'acessorio' : 'equipamento';
+}
+
+function etapaKeysPedido(pedido) {
+  return ET_FLUXOS[tipoProducaoPedido(pedido)] || ET_FLUXOS.equipamento;
+}
+
 function producaoIniciada(pedido) {
-  return ET_KEYS.some(key => etapaProducaoIniciada(pedido?.etapas?.[key]));
+  return etapaKeysPedido(pedido).some(key => etapaProducaoIniciada(pedido?.etapas?.[key]));
 }
 
 function diasAtrasoPedido(pedido) {
@@ -241,26 +259,22 @@ function badgeSep(status) {
 }
 
 function etapaAtual(pedido) {
-  const ordem = [
-    'burnIn','fechamentoFinal','testeFinal',
-    'montagemMecanica','testeInicial','montagemRevisao','conferencia'
-  ];
+  const ordem = etapaKeysPedido(pedido).slice().reverse();
   for (const k of ordem) {
-    if (etapaProducaoIniciada(pedido.etapas?.[k])) return ET_NOMES[k] || k;
+    if (etapaProducaoIniciada(pedido?.etapas?.[k])) return ET_NOMES[k] || k;
   }
   return '—';
 }
 
 function pedidoConcluido(pedido) {
-  return ET_KEYS.every(k => {
+  return etapaKeysPedido(pedido).every(k => {
     if (k === 'conferencia') {
-      const c = pedido.etapas?.[k] || {};
+      const c = pedido?.etapas?.[k] || {};
       return !!(c.inicio || c.tipoConferencia || c.recebimentoParcial || c.recebimentoTotal);
     }
-    return !!pedido.etapas?.[k]?.fim;
+    return !!pedido?.etapas?.[k]?.fim;
   });
 }
-
 function separacaoPermiteFinalizacao(status) {
   const normalized = String(status || '').trim().toLowerCase();
   return normalized === 'separado' || normalized.includes('parcial');
@@ -312,6 +326,7 @@ const App = {
       this.data = Store.initLocal();
     }
     
+    this.normalizarTiposProducao();
     this._dataSignature = this.assinaturaDados(this.data);
     this.iniciarLogoutInatividade(10 * 60 * 1000);
 
@@ -767,7 +782,9 @@ const App = {
     document.getElementById('ver-titulo').textContent =
       `${p.produto}${p.serie ? ' — ' + p.serie : ''}`;
 
-    const etapasHtml = Object.entries(p.etapas || {}).map(([k, e]) => `
+    const etapasHtml = etapaKeysPedido(p).map(k => {
+      const e = { ...etapaVazia(), ...(p.etapas?.[k] || {}) };
+      return `
       <div class="etapa-card">
         <div class="etapa-nome">${ET_NOMES[k] || k}</div>
         ${e.tecnico ? `<div class="etapa-row"><span>Responsável</span><span>${escapar(e.tecnico)}</span></div>` : ''}
@@ -778,10 +795,11 @@ const App = {
         ${e.problema && e.problema !== 'Não' && e.problema !== 'NaN'
           ? `<span class="etapa-problema">${escapar(e.problema)}</span>` : ''}
         ${e.problema && e.problema !== 'Não' && e.problema !== 'NaN' ? `
-          <div class="etapa-row"><span>In�cio problema</span><span>${fmtData(e.problemaSaida)}</span></div>
+          <div class="etapa-row"><span>Início problema</span><span>${fmtData(e.problemaSaida)}</span></div>
           <div class="etapa-row"><span>Retorno</span><span>${fmtData(e.problemaRetorno)}</span></div>
           ${e.problemaDescricao ? `<div class="etapa-obs">${escapar(e.problemaDescricao)}</div>` : ''}` : ''}
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
     document.getElementById('ver-body').innerHTML = `
       <div class="detail-section">
@@ -789,6 +807,8 @@ const App = {
         <div class="detail-grid">
           <div class="detail-item"><label>Produto</label>
             <span>${escapar(p.produto)}</span></div>
+          <div class="detail-item"><label>Tipo</label>
+            <span>${this.labelTipoProduto(tipoProducaoPedido(p))}</span></div>
           <div class="detail-item"><label>N° Série</label>
             <span style="font-family:var(--font-mono)">${escapar(p.serie)||'—'}</span></div>
           <div class="detail-item"><label>Cliente</label>
@@ -905,7 +925,8 @@ const App = {
       const podeProd = typeof Auth === 'undefined' || Auth.pode('editarProducao');
       const dis = podeProd ? '' : 'disabled';
       const tecnicoAtual = typeof Auth !== 'undefined' ? Auth.getNome() : '';
-      form.innerHTML = ET_KEYS.map(key => {
+      const etapaKeys = etapaKeysPedido(p);
+      form.innerHTML = etapaKeys.map(key => {
         const e = { ...etapaVazia(), ...(p.etapas?.[key] || {}) };
         const ops = key === 'conferencia'
           ? ['Não','Hardware','Mecânica','Componente']
@@ -941,7 +962,7 @@ const App = {
           </div>` : '';
         const problemaDetalhe = key !== 'conferencia' ? `
           <div class="form-group etapa-problema-detalhe" data-etapa="${key}">
-            <label>Data In�cio Problema</label>
+            <label>Data Início Problema</label>
             <input class="input" type="date"
               id="ete-${key}-prob-saida" value="${e.problemaSaida||''}" ${dis}/>
           </div>
@@ -994,7 +1015,7 @@ const App = {
             </div>
           </div>`;
       }).join('');
-      ET_KEYS.forEach(key => this.toggleProblemaEtapa(key));
+      etapaKeys.forEach(key => this.toggleProblemaEtapa(key));
       this.toggleDatasConferencia();
     }
 
@@ -1075,9 +1096,9 @@ const App = {
     });
   },
 
-  validarProducao() {
+  validarProducao(pedido = null) {
     const gv = id => document.getElementById(id)?.value || '';
-    for (const key of ET_KEYS) {
+    for (const key of etapaKeysPedido(pedido || { tipoProducao: 'equipamento' })) {
       const nome = ET_NOMES[key] || key;
       const inicio = gv(`ete-${key}-ini`);
       const fim = gv(`ete-${key}-fim`);
@@ -1113,11 +1134,11 @@ const App = {
         const retorno = gv(`ete-${key}-prob-retorno`);
         const descricao = gv(`ete-${key}-prob-desc`).trim();
         if (!saida || !descricao) {
-          this.toast(`Preencha a data de in�cio e a explica��o do problema em ${nome}.`, 'error');
+          this.toast(`Preencha a data de início e a explicação do problema em ${nome}.`, 'error');
           return false;
         }
         if (retorno && retorno < saida) {
-          this.toast(`O retorno do problema n�o pode ser anterior ao in�cio em ${nome}.`, 'error');
+          this.toast(`O retorno do problema não pode ser anterior ao início em ${nome}.`, 'error');
           return false;
         }
       }
@@ -1155,6 +1176,8 @@ const App = {
       p.observacao = gv('ed-obs-comercial-edit').trim();
       produtoAlterado = produtoAnterior !== p.produto;
       if (produtoAlterado) {
+        p.tipoProducao = this.getTipoProduto(p.produto);
+        p.etapas = this.criarEtapasPedido(p.tipoProducao, p.etapas || {});
         p.componentesChecklist = this.criarChecklistComponentes(p.produto);
       }
     }
@@ -1168,15 +1191,15 @@ const App = {
       const podeAdmin = this.usuarioAdmin();
 
       if (serieObrigatoriaAtual && !podeAdmin && serieFoiAlterada) {
-        this.toast('Este n�mero de s�rie � fixo. Apenas admin pode alterar.', 'error');
+        this.toast('Este número de série é fixo. Apenas admin pode alterar.', 'error');
         return;
       }
       if ((serieObrigatoriaAtual || document.getElementById('ed-serie-obrigatoria')?.checked) && !serieEditada) {
-        this.toast('Informe o n�mero de s�rie obrigat�rio.', 'error');
+        this.toast('Informe o número de série obrigatório.', 'error');
         return;
       }
       if (serieFoiAlterada && this.serieJaCadastrada(serieEditada, p.id)) {
-        this.toast('J� existe um pedido cadastrado com este n�mero de s�rie.', 'error');
+        this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
         return;
       }
 
@@ -1199,10 +1222,10 @@ const App = {
     // Salva PRODUÇÃO (se tiver permissão)
     const podeProd = typeof Auth === 'undefined' || Auth.pode('editarProducao');
     if (podeProd) {
-      if (!this.validarProducao()) return;
+      if (!this.validarProducao(p)) return;
       if (!p.etapas) p.etapas = {};
       const tecnicoAtual = typeof Auth !== 'undefined' ? Auth.getNome() : '';
-      ET_KEYS.forEach(key => {
+      etapaKeysPedido(p).forEach(key => {
         const atual = p.etapas[key] || {};
         const inicio = gv(`ete-${key}-ini`);
         const problema = gv(`ete-${key}-prob`);
@@ -1295,13 +1318,15 @@ const App = {
     const serie = gv('np-serie').trim();
     const serieObrigatoria = !!document.getElementById('np-serie-obrigatoria')?.checked;
     if (serieObrigatoria && !serie) {
-      this.toast('Informe o n�mero de s�rie obrigat�rio.', 'error');
+      this.toast('Informe o número de série obrigatório.', 'error');
       return;
     }
     if (this.serieJaCadastrada(serie)) {
-      this.toast('J� existe um pedido cadastrado com este n�mero de s�rie.', 'error');
+      this.toast('Já existe um pedido cadastrado com este número de série.', 'error');
       return;
-    }    const urgente = !!document.getElementById('np-urgente')?.checked;
+    }
+    const tipoProducao = this.getTipoProduto(prod);
+    const urgente = !!document.getElementById('np-urgente')?.checked;
     const posicaoLista = gv('np-posicao-lista') === 'topo' ? 'topo' : 'final';
     const prazoDias = gv('np-prazo-dias') === '' ? '' : parseInt(gv('np-prazo-dias'), 10);
     if (prazoDias !== '' && (Number.isNaN(prazoDias) || prazoDias < 0)) {
@@ -1312,6 +1337,7 @@ const App = {
     const p = {
       id:               uid(),
       produto:          prod,
+      tipoProducao,
       serie,
       serieObrigatoria,
       cliente:          gv('np-cliente').trim(),
@@ -1337,15 +1363,7 @@ const App = {
       dataRetornoPecas:   '',
       pecasPedidas:       '',
       componentesChecklist: this.criarChecklistComponentes(prod),
-      etapas: {
-        conferencia:      etapaVazia(),
-        montagemRevisao:  etapaVazia(),
-        testeInicial:     etapaVazia(),
-        montagemMecanica: etapaVazia(),
-        testeFinal:       etapaVazia(),
-        fechamentoFinal:  etapaVazia(),
-        burnIn:           etapaVazia()
-      }
+      etapas: this.criarEtapasPedido(tipoProducao)
     };
 
     if (posicaoLista === 'topo') this.data.pedidos.unshift(p);
@@ -1514,7 +1532,7 @@ const App = {
             <span>${escapar(p.etapa)}: ${escapar(p.problema)}</span>
             <small>${escapar(p.descricao)}</small>
             ${(p.saida || p.retorno) ? `
-              <small>In�cio problema: ${fmtData(p.saida)} � Retorno: ${fmtData(p.retorno)}</small>` : ''}
+              <small>Início problema: ${fmtData(p.saida)} · Retorno: ${fmtData(p.retorno)}</small>` : ''}
           </div>`).join('')}
       </details>`;
   },
@@ -2058,7 +2076,7 @@ const App = {
     const atual = select.value;
     select.innerHTML = '<option value="">Produto principal</option>' + itens.map(item => {
       const nivel = parseInt(item.nivel, 10) || 0;
-      const prefixo = nivel > 0 ? '� '.repeat(Math.min(nivel, 4)) : '';
+      const prefixo = nivel > 0 ? '↳ '.repeat(Math.min(nivel, 4)) : '';
       const label = `${prefixo}${item.codigo ? item.codigo + ' - ' : ''}${item.descricao}`;
       return `<option value="${escapar(item.id)}">${escapar(label)}</option>`;
     }).join('');
@@ -2354,6 +2372,45 @@ const App = {
     });
   },
 
+  getTipoProduto(produto) {
+    const tipo = this.data?.produtoTipos?.[produto];
+    return tipo === 'acessorio' ? 'acessorio' : 'equipamento';
+  },
+
+  labelTipoProduto(tipo) {
+    return tipo === 'acessorio' ? 'Acessório' : 'Equipamento';
+  },
+
+  criarEtapasPedido(tipo = 'equipamento', atuais = {}) {
+    const ref = { tipoProducao: tipo };
+    return etapaKeysPedido(ref).reduce((acc, key) => {
+      acc[key] = { ...etapaVazia(), ...(atuais?.[key] || {}) };
+      return acc;
+    }, {});
+  },
+
+  normalizarTiposProducao() {
+    if (!this.data) return;
+    if (!this.data.produtoTipos || typeof this.data.produtoTipos !== 'object' || Array.isArray(this.data.produtoTipos)) {
+      this.data.produtoTipos = {};
+    }
+    this.getProdutos().forEach(produto => {
+      if (!this.data.produtoTipos[produto]) this.data.produtoTipos[produto] = 'equipamento';
+    });
+    (this.data.pedidos || []).forEach(pedido => {
+      if (!pedido.tipoProducao) pedido.tipoProducao = this.getTipoProduto(pedido.produto);
+      pedido.etapas = this.criarEtapasPedido(pedido.tipoProducao, pedido.etapas || {});
+    });
+  },
+
+  atualizarTipoPedidosProduto(produto, tipo) {
+    (this.data.pedidos || []).forEach(pedido => {
+      if (pedido.produto !== produto) return;
+      if (producaoIniciada(pedido)) return;
+      pedido.tipoProducao = tipo;
+      pedido.etapas = this.criarEtapasPedido(tipo, pedido.etapas || {});
+    });
+  },
   getProdutos() {
     const produtos = Array.isArray(this.data?.produtos) ? this.data.produtos : [];
     return [...new Set(produtos.map(p => String(p || '').trim()).filter(Boolean))]
@@ -2375,13 +2432,14 @@ const App = {
       container.innerHTML = '<div class="empty-state">Nenhum produto cadastrado.</div>';
       return;
     }
-    container.innerHTML = `<table class="table"><thead><tr><th>Produto</th><th>Ações</th></tr></thead><tbody>${produtos.map(produto => `
+    container.innerHTML = `<table class="table"><thead><tr><th>Produto</th><th>Tipo</th><th>Ações</th></tr></thead><tbody>${produtos.map(produto => `
       <tr>
         <td><strong>${escapar(produto)}</strong></td>
+        <td>${this.labelTipoProduto(this.getTipoProduto(produto))}</td>
         <td>
           <div class="actions-cell">
-            <button class="btn-icon" onclick="App.editarProduto('${escapar(produto)}')" title="Editar">✏</button>
-            <button class="btn-icon danger" onclick="App.excluirProduto('${escapar(produto)}')" title="Excluir">✕</button>
+            <button class="btn-icon" onclick="App.editarProduto('${escapar(produto)}')" title="Editar">Ed</button>
+            <button class="btn-icon danger" onclick="App.excluirProduto('${escapar(produto)}')" title="Excluir">X</button>
           </div>
         </td>
       </tr>`).join('')}</tbody></table>`;
@@ -2391,6 +2449,7 @@ const App = {
     ev.preventDefault();
     const nome = (document.getElementById('produto-nome')?.value || '').trim();
     const original = (document.getElementById('produto-original')?.value || '').trim();
+    const tipo = document.getElementById('produto-tipo')?.value === 'acessorio' ? 'acessorio' : 'equipamento';
     if (!nome) {
       this.toast('Informe o nome do produto.', 'error');
       return;
@@ -2407,13 +2466,17 @@ const App = {
       ? produtos.map(p => p === original ? nome : p)
       : [...produtos, nome];
     this.data.produtos = this.getProdutos();
+    if (!this.data.produtoTipos || typeof this.data.produtoTipos !== 'object' || Array.isArray(this.data.produtoTipos)) this.data.produtoTipos = {};
     if (original && original !== nome) {
       const estrutura = this.getEstruturaProduto(original);
       if (estrutura) estrutura.produto = nome;
+      delete this.data.produtoTipos[original];
     }
+    this.data.produtoTipos[nome] = tipo;
+    this.atualizarTipoPedidosProduto(nome, tipo);
 
     Store.save(this.data);
-    this.log(original ? 'Editar Produto' : 'Criar Produto', { produto: nome, original });
+    this.log(original ? 'Editar Produto' : 'Criar Produto', { produto: nome, original, tipo });
     this.resetProdutoForm();
     this.renderProdutosList();
     this._populateProdutos();
@@ -2423,6 +2486,8 @@ const App = {
   editarProduto(produto) {
     document.getElementById('produto-original').value = produto;
     document.getElementById('produto-nome').value = produto;
+    const tipoEl = document.getElementById('produto-tipo');
+    if (tipoEl) tipoEl.value = this.getTipoProduto(produto);
     this.renderProdutoComponentes(produto);
     document.getElementById('produto-nome').focus();
   },
@@ -2438,6 +2503,7 @@ const App = {
     if (!confirm(`Excluir o produto ${produto}?`)) return;
     this.data.produtos = this.getProdutos().filter(p => p !== produto);
     this.data.produtoEstruturas = (this.data.produtoEstruturas || []).filter(e => e.produto !== produto);
+    if (this.data.produtoTipos) delete this.data.produtoTipos[produto];
     Store.save(this.data);
     this.log('Excluir Produto', { produto });
     this.renderProdutosList();
@@ -2448,6 +2514,8 @@ const App = {
   resetProdutoForm() {
     document.getElementById('produto-original').value = '';
     document.getElementById('produto-nome').value = '';
+    const tipoEl = document.getElementById('produto-tipo');
+    if (tipoEl) tipoEl.value = 'equipamento';
     ['produto-comp-codigo', 'produto-comp-desc'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
     const qtd = document.getElementById('produto-comp-qtd');
     if (qtd) qtd.value = '1';
@@ -2457,7 +2525,6 @@ const App = {
     if (parent) parent.value = '';
     this.renderProdutoComponentes();
   },
-
   // ── KITS MANAGEMENT ──
   openKitsModal() {
     this._editingKitId = null;
@@ -2720,7 +2787,8 @@ const App = {
       prodBox.textContent = '';
       return;
     }
-    const etapas = Object.entries(snapshot.etapas || {}).map(([key, etapa]) => {
+    const etapas = etapaKeysPedido(snapshot).map(key => {
+      const etapa = { ...etapaVazia(), ...(snapshot.etapas?.[key] || {}) };
       return `<div style="margin-bottom:12px">
         <strong>${escapar(ET_NOMES[key] || key)}</strong><br/>
         Início: ${fmtData(etapa.inicio)}<br/>
@@ -2913,7 +2981,8 @@ const App = {
 
       this.data = dados;
       await Store.save(this.data, { atualizarOrdem: true, strict: true });
-      this._dataSignature = this.assinaturaDados(this.data);
+      this.normalizarTiposProducao();
+    this._dataSignature = this.assinaturaDados(this.data);
       this._pageContentCache = {};
       this._populateProdutos();
       this.navigate(this.paginaAtual, { force: true });
@@ -2940,8 +3009,15 @@ const App = {
     normalizado.produtoEstruturas = Array.isArray(normalizado.produtoEstruturas)
       ? normalizado.produtoEstruturas
       : [];
+    if (!normalizado.produtoTipos || typeof normalizado.produtoTipos !== 'object' || Array.isArray(normalizado.produtoTipos)) {
+      normalizado.produtoTipos = {};
+    }
+    normalizado.produtos.forEach(produto => {
+      if (!normalizado.produtoTipos[produto]) normalizado.produtoTipos[produto] = 'equipamento';
+    });
     normalizado.pedidos.forEach(pedido => {
       pedido.serieObrigatoria = !!pedido.serieObrigatoria;
+      pedido.tipoProducao = pedido.tipoProducao === 'acessorio' ? 'acessorio' : (normalizado.produtoTipos[pedido.produto] || 'equipamento');
     });
     if (!normalizado.criadoEm) normalizado.criadoEm = new Date().toISOString();
     return normalizado;
@@ -3148,3 +3224,4 @@ const App = {
 // ── BOOT ────────────────────────────────────────────────────
 window.App = App;
 document.addEventListener('DOMContentLoaded', () => App.init());
+
